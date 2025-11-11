@@ -1,0 +1,36 @@
+package takagi.ru.fleur.ui.screens.inbox
+
+import takagi.ru.fleur.domain.model.Email
+import takagi.ru.fleur.domain.model.FleurError
+import takagi.ru.fleur.domain.model.SyncResult
+
+/**
+ * 收件箱 UI 状态
+ */
+data class InboxUiState(
+    val emails: List<Email> = emptyList(),
+    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val error: FleurError? = null,
+    val viewMode: ViewMode = ViewMode.LIST,
+    val selectedAccountId: String? = null,
+    val currentPage: Int = 0,
+    val hasMorePages: Boolean = true,
+    val isMultiSelectMode: Boolean = false,
+    val selectedEmailIds: Set<String> = emptySet(),
+    val isSyncing: Boolean = false,
+    val lastSyncResult: List<SyncResult>? = null,
+    val syncError: FleurError? = null,
+    val isOffline: Boolean = false,
+    val pendingOperationCount: Int = 0,
+    val swipeRightAction: takagi.ru.fleur.domain.model.SwipeAction = takagi.ru.fleur.domain.model.SwipeAction.ARCHIVE,
+    val swipeLeftAction: takagi.ru.fleur.domain.model.SwipeAction = takagi.ru.fleur.domain.model.SwipeAction.DELETE
+)
+
+/**
+ * 视图模式
+ */
+enum class ViewMode {
+    LIST,    // 传统列表视图
+    CHAT     // 聊天视图
+}
