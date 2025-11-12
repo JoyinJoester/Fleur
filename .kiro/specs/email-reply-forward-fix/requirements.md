@@ -26,7 +26,8 @@
 2. WHEN EmailDetailViewModel 触发回复导航, THE Navigation_System SHALL 传递原邮件ID和回复类型参数到撰写页面
 3. WHEN ComposeScreen 接收到回复类型参数, THE ComposeScreen SHALL 预填充收件人为原邮件发件人
 4. WHEN ComposeScreen 预填充回复内容, THE ComposeScreen SHALL 在主题前添加"Re: "前缀（如果尚未存在）
-5. WHEN ComposeScreen 预填充回复内容, THE ComposeScreen SHALL 在正文中引用原邮件内容
+5. WHEN ComposeScreen 显示回复界面, THE ComposeScreen SHALL 在独立的只读区域显示原始邮件内容
+6. WHEN ComposeScreen 显示回复界面, THE ComposeScreen SHALL 提供独立的可编辑输入区域供用户输入回复内容
 
 ### Requirement 2
 
@@ -58,8 +59,20 @@
 
 #### Acceptance Criteria
 
-1. WHEN ComposeScreen 引用原邮件内容, THE ComposeScreen SHALL 在引用内容前添加分隔线和原邮件信息头
-2. WHEN ComposeScreen 显示原邮件信息头, THE ComposeScreen SHALL 包含原邮件的发件人、日期、收件人和主题
-3. WHEN ComposeScreen 引用原邮件正文, THE ComposeScreen SHALL 在每行前添加引用标记（如">"）
+1. WHEN ComposeScreen 显示原邮件内容区域, THE ComposeScreen SHALL 在独立的卡片或面板中显示原邮件
+2. WHEN ComposeScreen 显示原邮件信息, THE ComposeScreen SHALL 包含原邮件的发件人、日期、收件人和主题
+3. WHEN ComposeScreen 显示原邮件正文, THE ComposeScreen SHALL 在只读区域中完整显示原邮件内容
 4. WHEN ComposeScreen 处理HTML格式的原邮件, THE ComposeScreen SHALL 保持原邮件的基本格式
 5. WHEN ComposeScreen 转发包含附件的邮件, THE ComposeScreen SHALL 在转发邮件中保留原附件信息
+
+### Requirement 5
+
+**User Story:** 作为邮件应用用户，我希望回复界面清晰地区分原邮件和我的回复内容，以便更好地组织我的回复
+
+#### Acceptance Criteria
+
+1. WHEN ComposeScreen 处于回复或全部回复模式, THE ComposeScreen SHALL 在顶部显示回复内容输入区域
+2. WHEN ComposeScreen 处于回复或全部回复模式, THE ComposeScreen SHALL 在下方显示原始邮件的只读展示区域
+3. WHEN ComposeScreen 显示原始邮件区域, THE ComposeScreen SHALL 使用视觉分隔（如卡片、边框或背景色）区分原邮件和回复输入区
+4. WHEN ComposeScreen 显示原始邮件区域, THE ComposeScreen SHALL 允许用户折叠或展开原邮件内容以节省屏幕空间
+5. WHEN User_System 发送回复邮件, THE ComposeScreen SHALL 将回复内容和原邮件内容合并为符合邮件标准的格式

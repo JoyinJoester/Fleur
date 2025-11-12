@@ -70,29 +70,32 @@ object EmailContentFormatter {
      */
     fun buildReplyBody(originalEmail: Email): String {
         return buildString {
-            // 留出用户输入区域
             appendLine()
             appendLine()
-            
-            // 原邮件分隔线和信息头
+            append(buildReplyQuote(originalEmail))
+        }
+    }
+
+    /**
+     * 构建回复引用内容（不包含用户输入区域）
+     */
+    fun buildReplyQuote(originalEmail: Email): String {
+        return buildString {
             appendLine("---------- 原始邮件 ----------")
             appendLine("发件人: ${originalEmail.from.formatted()}")
             appendLine("日期: ${formatTimestamp(originalEmail.timestamp)}")
             appendLine("收件人: ${originalEmail.to.joinToString(", ") { it.formatted() }}")
-            
+
             if (originalEmail.cc.isNotEmpty()) {
                 appendLine("抄送: ${originalEmail.cc.joinToString(", ") { it.formatted() }}")
             }
-            
+
             appendLine("主题: ${originalEmail.subject}")
             appendLine()
-            
-            // 引用原邮件内容（每行前添加 ">" 标记）
+
             val originalContent = getEmailContent(originalEmail)
-            originalContent.lines().forEach { line ->
-                appendLine("> $line")
-            }
-        }
+            append(originalContent)
+        }.trimEnd()
     }
     
     /**
@@ -122,24 +125,29 @@ object EmailContentFormatter {
      */
     fun buildForwardBody(originalEmail: Email): String {
         return buildString {
-            // 留出用户输入区域
             appendLine()
             appendLine()
-            
-            // 转发邮件分隔线和信息头
+            append(buildForwardQuote(originalEmail))
+        }
+    }
+
+    /**
+     * 构建转发引用内容（不包含用户输入区域）
+     */
+    fun buildForwardQuote(originalEmail: Email): String {
+        return buildString {
             appendLine("---------- 转发邮件 ----------")
             appendLine("发件人: ${originalEmail.from.formatted()}")
             appendLine("日期: ${formatTimestamp(originalEmail.timestamp)}")
             appendLine("收件人: ${originalEmail.to.joinToString(", ") { it.formatted() }}")
-            
+
             if (originalEmail.cc.isNotEmpty()) {
                 appendLine("抄送: ${originalEmail.cc.joinToString(", ") { it.formatted() }}")
             }
-            
+
             appendLine("主题: ${originalEmail.subject}")
             appendLine()
-            
-            // 附件信息
+
             if (originalEmail.attachments.isNotEmpty()) {
                 appendLine("附件:")
                 originalEmail.attachments.forEach { attachment ->
@@ -147,11 +155,10 @@ object EmailContentFormatter {
                 }
                 appendLine()
             }
-            
-            // 原邮件内容（不添加引用标记）
+
             val originalContent = getEmailContent(originalEmail)
             append(originalContent)
-        }
+        }.trimEnd()
     }
     
     /**
@@ -214,5 +221,112 @@ object EmailContentFormatter {
             // 移除多余的空白
             .replace(Regex("\\s+"), " ")
             .trim()
+    }
+    
+    /**
+     * 合并回复内容和原邮件（发送时调用）
+     * 
+     * 格式：
+     * ```
+     * [用户的回复内容]
+     * 
+     * ---------- 原始邮件 ----------
+     * 发件人: 张三 <zhangsan@example.com>
+     * 日期: 2024-01-15 14:30:25
+     * 收件人: 李四 <lisi@example.com>
+     * 抄送: 王五 <wangwu@example.com>
+     * 主题: 会议通知
+     * 
+     * > 原邮件内容第一行
+     * > 原邮件内容第二行
+     * ```
+     * 
+     * @param replyText 用户输入的回复内容
+     * @param originalEmail 原始邮件
+     * @return 合并后的邮件正文
+     */
+    fun mergeReplyContent(replyText: String, originalEmail: Email): String {
+        return buildString {
+            // 用户的回复内容
+            append(replyText)
+            
+            // 分隔线和原邮件
+            appendLine()
+            appendLine()
+            appendLine("---------- 原始邮件 ----------")
+            appendLine("发件人: ${originalEmail.from.formatted()}")
+            appendLine("日期: ${formatTimestamp(originalEmail.timestamp)}")
+            appendLine("收件人: ${originalEmail.to.joinToString(", ") { it.formatted() }}")
+            if (originalEmail.cc.isNotEmpty()) {
+                appendLine("抄送: ${originalEmail.cc.joinToString(", ") { it.formatted() }}")
+            }
+            appendLine("主题: ${originalEmail.subject}")
+            appendLine()
+            
+            // 引用原邮件内容
+            val originalContent = getEmailContent(originalEmail)
+            append(originalContent)
+        }
+    }
+    
+    /**
+     * 合并转发内容和原邮件（发送时调用）
+     * 
+     * 格式：
+     * ```
+     * [用户的转发说明]
+     * 
+     * ---------- 转发邮件 ----------
+     * 发件人: 张三 <zhangsan@example.com>
+     * 日期: 2024-01-15 14:30:25
+     * 收件人: 李四 <lisi@example.com>
+     * 抄送: 王五 <wangwu@example.com>
+     * 主题: 会议通知
+     * 
+     * 附件:
+     *   - 会议议程.pdf (245.3 KB)
+     *   - 演示文稿.pptx (1.2 MB)
+     * 
+     * 原邮件内容第一行
+     * 原邮件内容第二行
+     * ```
+     * 
+     * @param forwardNote 用户输入的转发说明
+     * @param originalEmail 原始邮件
+     * @return 合并后的邮件正文
+     */
+    fun mergeForwardContent(forwardNote: String, originalEmail: Email): String {
+        return buildString {
+            // 用户的转发说明
+            if (forwardNote.isNotBlank()) {
+                append(forwardNote)
+                appendLine()
+                appendLine()
+            }
+            
+            // 分隔线和原邮件
+            appendLine("---------- 转发邮件 ----------")
+            appendLine("发件人: ${originalEmail.from.formatted()}")
+            appendLine("日期: ${formatTimestamp(originalEmail.timestamp)}")
+            appendLine("收件人: ${originalEmail.to.joinToString(", ") { it.formatted() }}")
+            if (originalEmail.cc.isNotEmpty()) {
+                appendLine("抄送: ${originalEmail.cc.joinToString(", ") { it.formatted() }}")
+            }
+            appendLine("主题: ${originalEmail.subject}")
+            appendLine()
+            
+            // 附件信息
+            if (originalEmail.attachments.isNotEmpty()) {
+                appendLine("附件:")
+                originalEmail.attachments.forEach { attachment ->
+                    appendLine("  - ${attachment.fileName} (${attachment.formattedSize()})")
+                }
+                appendLine()
+            }
+            
+            // 原邮件内容（不添加引用标记）
+            val originalContent = getEmailContent(originalEmail)
+            append(originalContent)
+        }
     }
 }

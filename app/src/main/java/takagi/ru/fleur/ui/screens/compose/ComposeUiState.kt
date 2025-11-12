@@ -3,6 +3,7 @@ package takagi.ru.fleur.ui.screens.compose
 import takagi.ru.fleur.domain.model.Account
 import takagi.ru.fleur.domain.model.Attachment
 import takagi.ru.fleur.domain.model.ComposeMode
+import takagi.ru.fleur.domain.model.Email
 import takagi.ru.fleur.domain.model.FleurError
 
 /**
@@ -42,7 +43,9 @@ data class ComposeUiState(
     val lastDraftSaveTime: Long? = null,
     val isDirty: Boolean = false,
     val composeMode: ComposeMode = ComposeMode.NEW,
-    val referenceEmailId: String? = null
+    val referenceEmailId: String? = null,
+    val referenceEmail: Email? = null,
+    val quotedOriginalContent: String = ""
 ) {
     /**
      * 验证是否可以发送

@@ -7,8 +7,8 @@
 本设计将实现以下功能：
 1. 在 `EmailDetailViewModel` 中实现导航逻辑
 2. 扩展 `ComposeViewModel` 以支持回复和转发模式
-3. 在 `ComposeScreen` 中根据模式预填充内容
-4. 实现邮件内容的引用格式化
+3. 在 `ComposeScreen` 中实现分离式 UI 布局：回复输入区域和原邮件展示区域独立显示
+4. 实现邮件内容的格式化和合并逻辑
 
 ## Architecture
 
@@ -219,7 +219,8 @@ class ComposeViewModel @Inject constructor(
             it.copy(
                 toAddresses = referenceEmail.from.formatted(),
                 subject = addReplyPrefix(referenceEmail.subject),
-                body = buildReplyBody(referenceEmail),
+                body = "",  // 回复内容为空，由用户输入
+                originalEmail = referenceEmail,  // 保存原邮件用于显示
                 isDirty = false  // 预填充不算修改
             )
         }
@@ -250,7 +251,8 @@ class ComposeViewModel @Inject constructor(
                 ccAddresses = ccAddresses,
                 showCcBcc = ccAddresses.isNotEmpty(),
                 subject = addReplyPrefix(referenceEmail.subject),
-                body = buildReplyBody(referenceEmail),
+                body = "",  // 回复内容为空，由用户输入
+                originalEmail = referenceEmail,  // 保存原邮件用于显示
                 isDirty = false
             )
         }
@@ -264,10 +266,20 @@ class ComposeViewModel @Inject constructor(
             it.copy(
                 subject = addForwardPrefix(referenceEmail.subject),
                 body = buildForwardBody(referenceEmail),
+                originalEmail = referenceEmail,  // 保存原邮件用于显示
                 // 转发时保留原附件引用
                 attachments = referenceEmail.attachments,
                 isDirty = false
             )
+        }
+    }
+    
+    /**
+     * 切换原邮件展开/折叠状态
+     */
+    fun toggleOriginalEmailExpanded() {
+        _uiState.update {
+            it.copy(isOriginalEmailExpanded = !it.isOriginalEmailExpanded)
         }
     }
     
@@ -277,7 +289,7 @@ class ComposeViewModel @Inject constructor(
 
 ### 5. 邮件内容格式化工具
 
-**职责**：格式化回复和转发的邮件内容
+**职责**：格式化回复和转发的邮件内容，在发送时合并用户输入和原邮件
 
 **新增文件**：`EmailContentFormatter.kt`
 ```kotlin
@@ -306,10 +318,14 @@ object EmailContentFormatter {
     }
     
     /**
-     * 构建回复正文
+     * 合并回复内容和原邮件（发送时调用）
      */
-    fun buildReplyBody(originalEmail: Email): String {
+    fun mergeReplyContent(replyText: String, originalEmail: Email): String {
         return buildString {
+            // 用户的回复内容
+            append(replyText)
+            
+            // 分隔线和原邮件
             appendLine()
             appendLine()
             appendLine("---------- 原始邮件 ----------")
@@ -334,12 +350,18 @@ object EmailContentFormatter {
     }
     
     /**
-     * 构建转发正文
+     * 合并转发内容和原邮件（发送时调用）
      */
-    fun buildForwardBody(originalEmail: Email): String {
+    fun mergeForwardContent(forwardNote: String, originalEmail: Email): String {
         return buildString {
-            appendLine()
-            appendLine()
+            // 用户的转发说明
+            if (forwardNote.isNotBlank()) {
+                append(forwardNote)
+                appendLine()
+                appendLine()
+            }
+            
+            // 分隔线和原邮件
             appendLine("---------- 转发邮件 ----------")
             appendLine("发件人: ${originalEmail.from.formatted()}")
             appendLine("日期: ${formatTimestamp(originalEmail.timestamp)}")
@@ -393,7 +415,7 @@ object EmailContentFormatter {
 
 ### 6. ComposeUiState 修改
 
-**职责**：添加加载状态和模式信息
+**职责**：添加加载状态、模式信息和原邮件数据
 
 **修改内容**：
 ```kotlin
@@ -401,7 +423,9 @@ data class ComposeUiState(
     // ... 现有字段
     val isLoading: Boolean = false,  // 新增：加载原邮件时的状态
     val composeMode: ComposeMode = ComposeMode.NEW,  // 新增：撰写模式
-    val referenceEmailId: String? = null  // 新增：原邮件 ID
+    val referenceEmailId: String? = null,  // 新增：原邮件 ID
+    val originalEmail: Email? = null,  // 新增：原邮件完整数据（用于显示）
+    val isOriginalEmailExpanded: Boolean = true  // 新增：原邮件展开/折叠状态
 )
 ```
 
@@ -426,7 +450,198 @@ fun EmailDetailScreen(
 }
 ```
 
-### 8. NavGraph 修改
+### 8. ComposeScreen UI 组件修改
+
+**职责**：实现分离式 UI 布局，区分回复输入区和原邮件展示区
+
+**新增组件**：`OriginalEmailCard`
+```kotlin
+@Composable
+fun OriginalEmailCard(
+    email: Email,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FleurCard(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // 邮件头部信息
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "原始邮件",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = email.from.formatted(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = formatTimestamp(email.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                IconButton(onClick = onToggleExpanded) {
+                    Icon(
+                        imageVector = if (isExpanded) 
+                            Icons.Default.ExpandLess 
+                        else 
+                            Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "折叠" else "展开"
+                    )
+                }
+            }
+            
+            // 可展开的邮件内容
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier.padding(top = 12.dp)
+                ) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    
+                    // 收件人信息
+                    Text(
+                        text = "收件人: ${email.to.joinToString(", ") { it.formatted() }}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    if (email.cc.isNotEmpty()) {
+                        Text(
+                            text = "抄送: ${email.cc.joinToString(", ") { it.formatted() }}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    // 主题
+                    Text(
+                        text = "主题: ${email.subject}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    
+                    // 邮件正文
+                    Text(
+                        text = email.bodyPlain ?: email.bodyMarkdown ?: stripHtml(email.bodyHtml ?: ""),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(12.dp)
+                    )
+                    
+                    // 附件信息
+                    if (email.attachments.isNotEmpty()) {
+                        Text(
+                            text = "附件 (${email.attachments.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        email.attachments.forEach { attachment ->
+                            Row(
+                                modifier = Modifier.padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AttachFile,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${attachment.fileName} (${attachment.formattedSize()})",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**ComposeScreen 布局修改**：
+```kotlin
+@Composable
+fun ComposeScreen(
+    onNavigateBack: () -> Unit,
+    viewModel: ComposeViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    
+    Scaffold(
+        topBar = { /* 现有 TopBar */ },
+        floatingActionButton = { /* 现有 FAB */ }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // 收件人、主题等字段（现有代码）
+            // ...
+            
+            // 回复内容输入区域
+            OutlinedTextField(
+                value = uiState.body,
+                onValueChange = { viewModel.updateBody(it) },
+                label = { 
+                    Text(
+                        when (uiState.composeMode) {
+                            ComposeMode.REPLY, ComposeMode.REPLY_ALL -> "输入回复内容"
+                            ComposeMode.FORWARD -> "添加转发说明（可选）"
+                            else -> "正文"
+                        }
+                    ) 
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .heightIn(min = 200.dp),
+                textStyle = MaterialTheme.typography.bodyLarge
+            )
+            
+            // 原邮件展示区域（仅在回复/转发模式下显示）
+            if (uiState.originalEmail != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OriginalEmailCard(
+                    email = uiState.originalEmail!!,
+                    isExpanded = uiState.isOriginalEmailExpanded,
+                    onToggleExpanded = { viewModel.toggleOriginalEmailExpanded() },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+```
+
+### 9. NavGraph 修改
 
 **职责**：更新路由配置和参数传递
 
@@ -636,14 +851,16 @@ private fun loadReferenceEmail(emailId: String) {
 ### 实现顺序
 
 1. 创建 `ComposeMode` 枚举
-2. 创建 `EmailContentFormatter` 工具类
+2. 创建 `EmailContentFormatter` 工具类（包含合并方法）
 3. 修改 `Screen.Compose` 路由定义
-4. 修改 `ComposeUiState` 添加新字段
-5. 修改 `ComposeViewModel` 添加预填充逻辑
-6. 修改 `EmailDetailViewModel` 实现导航方法
-7. 修改 `EmailDetailScreen` 设置导航回调
-8. 修改 `NavGraph` 更新路由配置
-9. 在 `ComposeScreen` 添加加载状态显示
+4. 修改 `ComposeUiState` 添加新字段（originalEmail, isOriginalEmailExpanded）
+5. 修改 `ComposeViewModel` 添加预填充逻辑和展开/折叠方法
+6. 创建 `OriginalEmailCard` UI 组件
+7. 修改 `ComposeScreen` 实现分离式布局
+8. 修改 `ComposeViewModel.sendEmail()` 在发送时合并内容
+9. 修改 `EmailDetailViewModel` 实现导航方法
+10. 修改 `EmailDetailScreen` 设置导航回调
+11. 修改 `NavGraph` 更新路由配置
 
 ### 性能考虑
 

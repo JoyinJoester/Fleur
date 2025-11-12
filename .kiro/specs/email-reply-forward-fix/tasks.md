@@ -7,8 +7,10 @@
 
 
   - 创建 `ComposeMode` 枚举定义撰写模式（NEW, REPLY, REPLY_ALL, FORWARD, DRAFT）
-  - 创建 `EmailContentFormatter` 工具类，实现邮件内容格式化功能（添加前缀、构建引用正文）
-  - _Requirements: 1.4, 1.5, 2.5, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4_
+  - 创建 `EmailContentFormatter` 工具类，实现邮件内容格式化功能（添加前缀、合并回复/转发内容）
+  - 实现 `mergeReplyContent()` 方法合并用户回复和原邮件
+  - 实现 `mergeForwardContent()` 方法合并用户转发说明和原邮件
+  - _Requirements: 1.4, 2.5, 3.4, 4.1, 4.2, 4.3, 5.5_
 
 - [x] 2. 修改路由系统支持撰写模式参数
 
@@ -21,40 +23,50 @@
 - [x] 3. 扩展 ComposeViewModel 支持回复和转发
 
 
-  - 修改 `ComposeUiState` 添加 `isLoading`, `composeMode`, `referenceEmailId` 字段
+  - 修改 `ComposeUiState` 添加 `isLoading`, `composeMode`, `referenceEmailId`, `originalEmail`, `isOriginalEmailExpanded` 字段
   - 在 `ComposeViewModel` 构造函数中从 `SavedStateHandle` 获取模式和原邮件 ID 参数
   - 添加 `EmailRepository` 依赖到 `ComposeViewModel`
   - 实现 `loadReferenceEmail()` 方法加载原邮件
   - 实现 `prefillContent()` 方法根据模式分发预填充逻辑
-  - _Requirements: 1.2, 2.2, 3.2_
+  - 实现 `toggleOriginalEmailExpanded()` 方法切换原邮件展开/折叠状态
+  - _Requirements: 1.2, 2.2, 3.2, 5.4_
 
 - [x] 4. 实现回复模式的预填充逻辑
 
   - 实现 `prefillReply()` 方法
   - 预填充收件人为原邮件发件人
   - 使用 `EmailContentFormatter.addReplyPrefix()` 添加主题前缀
-  - 使用 `EmailContentFormatter.buildReplyBody()` 构建引用正文
-  - _Requirements: 1.3, 1.4, 1.5, 4.1, 4.2, 4.3, 4.4_
+  - 将 body 设置为空字符串（由用户输入）
+  - 保存 originalEmail 到 state 用于 UI 显示
+  - _Requirements: 1.3, 1.4, 1.5, 1.6, 5.1_
 
 
-- [ ] 5. 实现全部回复模式的预填充逻辑
+- [x] 5. 实现全部回复模式的预填充逻辑
+
+
+
+
+
   - 实现 `prefillReplyAll()` 方法
   - 预填充收件人为原发件人和所有收件人（排除当前用户）
   - 预填充抄送人为原抄送人（排除当前用户）
   - 自动显示抄送/密送字段（如果有抄送人）
   - 使用 `EmailContentFormatter.addReplyPrefix()` 添加主题前缀
-  - 使用 `EmailContentFormatter.buildReplyBody()` 构建引用正文
-  - _Requirements: 2.3, 2.4, 2.5, 4.1, 4.2, 4.3, 4.4_
+  - 将 body 设置为空字符串（由用户输入）
+  - 保存 originalEmail 到 state 用于 UI 显示
+  - _Requirements: 2.3, 2.4, 2.5, 5.1_
 
 
-- [ ] 6. 实现转发模式的预填充逻辑
+- [x] 6. 实现转发模式的预填充逻辑
+
+
   - 实现 `prefillForward()` 方法
   - 保持收件人字段为空
   - 使用 `EmailContentFormatter.addForwardPrefix()` 添加主题前缀
-  - 使用 `EmailContentFormatter.buildForwardBody()` 构建转发正文
+  - 将 body 设置为空字符串（用户可选添加转发说明）
+  - 保存 originalEmail 到 state 用于 UI 显示
   - 保留原邮件附件引用
-
-  - _Requirements: 3.3, 3.4, 3.5, 4.1, 4.2, 4.4, 4.5_
+  - _Requirements: 3.3, 3.4, 3.5, 4.5_
 
 - [x] 7. 实现 EmailDetailViewModel 的导航逻辑
 
@@ -74,16 +86,43 @@
   - 修改 `NavGraph` 中 `EmailDetail` 的 composable，实现导航逻辑根据模式构建正确的路由
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 3.1, 3.2_
 
-- [x]* 9. 在 ComposeScreen 添加加载状态显示
-
-  - 在 `ComposeScreen` 中检测 `uiState.isLoading` 状态
-  - 显示加载指示器（骨架屏或进度条）当加载原邮件时
-  - 确保加载完成后正确显示预填充的内容
-  - _Requirements: 1.2, 2.2, 3.2_
+- [x] 9. 创建 OriginalEmailCard UI 组件
 
 
 
-- [x] 10. 添加错误处理和用户提示
+  - 创建 `OriginalEmailCard` Composable 函数
+  - 显示原邮件的发件人、日期、收件人、主题信息
+  - 实现可展开/折叠的邮件正文区域
+  - 使用 FleurCard 和 Material 3 样式保持一致性
+  - 显示附件列表（如果有）
+  - 添加展开/折叠动画效果
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.2, 5.3, 5.4_
+
+- [x] 10. 修改 ComposeScreen 实现分离式布局
+
+
+
+  - 修改 `ComposeScreen` 布局，将回复输入区域放在顶部
+  - 根据 composeMode 调整输入框的 label 文本
+  - 在输入区域下方添加 `OriginalEmailCard`（仅在 originalEmail 不为 null 时显示）
+  - 连接 `toggleOriginalEmailExpanded` 回调到 ViewModel
+  - 在 `ComposeScreen` 中检测 `uiState.isLoading` 状态并显示加载指示器
+  - _Requirements: 1.5, 1.6, 5.1, 5.2, 5.3, 5.4_
+
+
+
+- [x] 11. 修改发送逻辑合并用户输入和原邮件
+
+
+
+
+  - 修改 `ComposeViewModel.sendEmail()` 方法
+  - 在发送回复时，使用 `EmailContentFormatter.mergeReplyContent()` 合并用户输入和原邮件
+  - 在发送转发时，使用 `EmailContentFormatter.mergeForwardContent()` 合并用户输入和原邮件
+  - 确保合并后的内容符合邮件标准格式
+  - _Requirements: 4.1, 4.2, 4.3, 5.5_
+
+- [x] 12. 添加错误处理和用户提示
 
   - 在 `ComposeViewModel.loadReferenceEmail()` 中添加 try-catch 错误处理
   - 加载失败时显示友好的错误消息

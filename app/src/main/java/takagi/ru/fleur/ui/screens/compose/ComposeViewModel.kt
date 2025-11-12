@@ -330,7 +330,27 @@ class ComposeViewModel @Inject constructor(
     private fun buildEmail(state: ComposeUiState): Email {
         val account = state.selectedAccount
             ?: throw IllegalStateException("未选择发件账户")
-        
+
+        val mergedBody = when (state.composeMode) {
+            ComposeMode.REPLY, ComposeMode.REPLY_ALL -> {
+                val reference = state.referenceEmail
+                if (reference != null) {
+                    EmailContentFormatter.mergeReplyContent(state.body, reference)
+                } else {
+                    state.body
+                }
+            }
+            ComposeMode.FORWARD -> {
+                val reference = state.referenceEmail
+                if (reference != null) {
+                    EmailContentFormatter.mergeForwardContent(state.body, reference)
+                } else {
+                    state.body
+                }
+            }
+            else -> state.body
+        }
+
         return Email(
             id = UUID.randomUUID().toString(),
             threadId = UUID.randomUUID().toString(),
@@ -343,8 +363,8 @@ class ComposeViewModel @Inject constructor(
             cc = parseEmailAddresses(state.ccAddresses),
             bcc = parseEmailAddresses(state.bccAddresses),
             subject = state.subject,
-            bodyPreview = state.body.take(200),
-            bodyPlain = state.body,
+            bodyPreview = mergedBody.take(200),
+            bodyPlain = mergedBody,
             bodyHtml = null,
             attachments = state.attachments,
             timestamp = Clock.System.now(),
@@ -394,7 +414,9 @@ class ComposeViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
-                                error = FleurError.NotFoundError("未找到原邮件")
+                                error = FleurError.NotFoundError("未找到原邮件"),
+                                referenceEmail = null,
+                                quotedOriginalContent = ""
                             )
                         }
                     }
@@ -404,7 +426,9 @@ class ComposeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = FleurError.UnknownError("加载原邮件失败: ${e.message}", e)
+                        error = FleurError.UnknownError("加载原邮件失败: ${e.message}", e),
+                        referenceEmail = null,
+                        quotedOriginalContent = ""
                     )
                 }
             }
@@ -425,7 +449,13 @@ class ComposeViewModel @Inject constructor(
             ComposeMode.DRAFT -> prefillDraft(originalEmail)
             ComposeMode.NEW -> {
                 // 新邮件模式不需要预填充
-                _uiState.update { it.copy(isLoading = false) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        referenceEmail = null,
+                        quotedOriginalContent = ""
+                    )
+                }
             }
         }
     }
@@ -438,9 +468,11 @@ class ComposeViewModel @Inject constructor(
     private fun prefillReply(originalEmail: Email) {
         _uiState.update {
             it.copy(
+                referenceEmail = originalEmail,
+                quotedOriginalContent = EmailContentFormatter.buildReplyQuote(originalEmail),
                 toAddresses = originalEmail.from.formatted(),
                 subject = EmailContentFormatter.addReplyPrefix(originalEmail.subject),
-                body = EmailContentFormatter.buildReplyBody(originalEmail),
+                body = "",
                 isLoading = false,
                 isDirty = false // 预填充的内容不算修改
             )
@@ -468,10 +500,12 @@ class ComposeViewModel @Inject constructor(
             
             _uiState.update {
                 it.copy(
+                    referenceEmail = originalEmail,
+                    quotedOriginalContent = EmailContentFormatter.buildReplyQuote(originalEmail),
                     toAddresses = toList.joinToString(", ") { addr -> addr.formatted() },
                     ccAddresses = ccList.joinToString(", ") { addr -> addr.formatted() },
                     subject = EmailContentFormatter.addReplyPrefix(originalEmail.subject),
-                    body = EmailContentFormatter.buildReplyBody(originalEmail),
+                    body = "",
                     showCcBcc = ccList.isNotEmpty(), // 如果有抄送人，自动显示抄送字段
                     isLoading = false,
                     isDirty = false
@@ -488,9 +522,11 @@ class ComposeViewModel @Inject constructor(
     private fun prefillForward(originalEmail: Email) {
         _uiState.update {
             it.copy(
+                referenceEmail = originalEmail,
+                quotedOriginalContent = EmailContentFormatter.buildForwardQuote(originalEmail),
                 toAddresses = "", // 转发时收件人为空
                 subject = EmailContentFormatter.addForwardPrefix(originalEmail.subject),
-                body = EmailContentFormatter.buildForwardBody(originalEmail),
+                body = "",
                 attachments = originalEmail.attachments, // 保留原邮件附件
                 isLoading = false,
                 isDirty = false
@@ -506,6 +542,8 @@ class ComposeViewModel @Inject constructor(
     private fun prefillDraft(draftEmail: Email) {
         _uiState.update {
             it.copy(
+                referenceEmail = null,
+                quotedOriginalContent = "",
                 toAddresses = draftEmail.to.joinToString(", ") { addr -> addr.formatted() },
                 ccAddresses = draftEmail.cc.joinToString(", ") { addr -> addr.formatted() },
                 bccAddresses = draftEmail.bcc.joinToString(", ") { addr -> addr.formatted() },

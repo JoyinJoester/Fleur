@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import takagi.ru.fleur.domain.model.Attachment
+import takagi.ru.fleur.domain.model.ComposeMode
 
 /**
  * 邮件撰写界面
@@ -179,8 +181,6 @@ fun ComposeScreen(
                 singleLine = true
             )
             
-            Divider()
-            
             // 富文本编辑工具栏
             RichTextToolbar()
             
@@ -196,6 +196,19 @@ fun ComposeScreen(
                     .heightIn(min = 200.dp),
                 singleLine = false
             )
+
+            if (uiState.quotedOriginalContent.isNotBlank()) {
+                Divider()
+                OriginalEmailPreview(
+                    quotedText = uiState.quotedOriginalContent,
+                    headline = when (uiState.composeMode) {
+                        ComposeMode.FORWARD -> "转发原文"
+                        ComposeMode.REPLY, ComposeMode.REPLY_ALL -> "引用原邮件"
+                        else -> "原始邮件"
+                    }
+                )
+                Divider()
+            }
             
             // 附件列表
             if (uiState.attachments.isNotEmpty()) {
@@ -341,6 +354,44 @@ private fun AccountSelector(
             imageVector = Icons.Default.ArrowDropDown,
             contentDescription = "选择账户"
         )
+    }
+}
+
+/**
+ * 原始邮件预览卡片
+ */
+@Composable
+private fun OriginalEmailPreview(
+    quotedText: String,
+    headline: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 2.dp,
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = headline,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            SelectionContainer {
+                Text(
+                    text = quotedText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
