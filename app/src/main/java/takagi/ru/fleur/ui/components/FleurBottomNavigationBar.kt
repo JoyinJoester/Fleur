@@ -68,8 +68,7 @@ fun FleurBottomNavigationBar(
     
     Surface(
         modifier = modifier
-            .fillMaxWidth()
-            .height(70.dp),
+            .fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp,
         shadowElevation = 8.dp,
@@ -77,7 +76,10 @@ fun FleurBottomNavigationBar(
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(70.dp)
+                // 添加底部系统导航栏的内边距，避免黑色长条
+                .navigationBarsPadding()
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically

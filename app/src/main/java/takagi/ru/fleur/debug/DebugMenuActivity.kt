@@ -86,8 +86,8 @@ class DebugMenuActivity : ComponentActivity() {
     private fun clearTestData() {
         lifecycleScope.launch {
             try {
-                TestDataInserter(this@DebugMenuActivity).clearTestEmails()
-                println("✅ 已清空测试数据")
+                val deletedCount = TestDataInserter(this@DebugMenuActivity).deleteTestEmails()
+                println("✅ 已清空测试数据,删除了 $deletedCount 封邮件")
             } catch (e: Exception) {
                 println("❌ 清空失败: ${e.message}")
                 e.printStackTrace()

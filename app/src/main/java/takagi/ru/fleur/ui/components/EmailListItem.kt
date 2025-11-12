@@ -77,10 +77,10 @@ fun EmailListItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 头像 - 滚动时显示占位符
+            // 头像
             AvatarWithInitial(
                 name = email.from.name ?: email.from.address,
-                showPlaceholder = isScrolling,
+                showPlaceholder = false, // 始终显示头像，不使用占位符
                 modifier = Modifier.size(48.dp)
             )
             

@@ -1,5 +1,6 @@
 package takagi.ru.fleur.ui.screens.inbox
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import takagi.ru.fleur.domain.model.Email
 import takagi.ru.fleur.domain.model.FleurError
 import takagi.ru.fleur.domain.usecase.GetEmailsUseCase
 import takagi.ru.fleur.domain.usecase.SyncEmailsUseCase
@@ -38,7 +40,24 @@ class InboxViewModel @Inject constructor(
     val uiState: StateFlow<InboxUiState> = _uiState.asStateFlow()
     
     companion object {
+        private const val TAG = "InboxViewModel"
         private const val PAGE_SIZE = 50
+        
+        /**
+         * 对邮件列表进行去重，确保每个邮件ID只出现一次
+         * 如果发现重复，会记录警告日志
+         */
+        private fun deduplicateEmails(emails: List<Email>, source: String): List<Email> {
+            val originalSize = emails.size
+            val uniqueEmails = emails.distinctBy { it.id }
+            val duplicateCount = originalSize - uniqueEmails.size
+            
+            if (duplicateCount > 0) {
+                Log.w(TAG, "[$source] 发现 $duplicateCount 个重复邮件，原始数量: $originalSize, 去重后: ${uniqueEmails.size}")
+            }
+            
+            return uniqueEmails
+        }
     }
     
     init {
@@ -110,6 +129,7 @@ class InboxViewModel @Inject constructor(
     
     /**
      * 加载邮件列表
+     * 自动对邮件列表进行去重，确保每个邮件ID只出现一次
      */
     fun loadEmails(reset: Boolean = false) {
         viewModelScope.launch {
@@ -142,8 +162,10 @@ class InboxViewModel @Inject constructor(
                                 } else {
                                     state.emails + newEmails
                                 }
+                                // 去重处理，确保邮件ID唯一
+                                val uniqueEmails = deduplicateEmails(updatedEmails, "loadEmails")
                                 state.copy(
-                                    emails = updatedEmails,
+                                    emails = uniqueEmails,
                                     isLoading = false,
                                     hasMorePages = newEmails.size >= PAGE_SIZE
                                 )
@@ -382,11 +404,12 @@ class InboxViewModel @Inject constructor(
                     onSuccess = {
                         // 更新列表中的邮件状态
                         _uiState.update { state ->
-                            state.copy(
-                                emails = state.emails.map {
-                                    if (it.id == emailId) it.copy(isStarred = !it.isStarred) else it
-                                }
-                            )
+                            val updatedEmails = state.emails.map {
+                                if (it.id == emailId) it.copy(isStarred = !it.isStarred) else it
+                            }
+                            // 去重处理
+                            val uniqueEmails = deduplicateEmails(updatedEmails, "toggleStar")
+                            state.copy(emails = uniqueEmails)
                         }
                     },
                     onFailure = { error ->
@@ -412,11 +435,12 @@ class InboxViewModel @Inject constructor(
                 onSuccess = {
                     // 更新列表中的邮件状态
                     _uiState.update { state ->
-                        state.copy(
-                            emails = state.emails.map {
-                                if (it.id == emailId) it.copy(isRead = true) else it
-                            }
-                        )
+                        val updatedEmails = state.emails.map {
+                            if (it.id == emailId) it.copy(isRead = true) else it
+                        }
+                        // 去重处理
+                        val uniqueEmails = deduplicateEmails(updatedEmails, "markAsRead")
+                        state.copy(emails = uniqueEmails)
                     }
                 },
                 onFailure = { error ->
@@ -441,11 +465,12 @@ class InboxViewModel @Inject constructor(
                 onSuccess = {
                     // 更新列表中的邮件状态
                     _uiState.update { state ->
-                        state.copy(
-                            emails = state.emails.map {
-                                if (it.id == emailId) it.copy(isRead = false) else it
-                            }
-                        )
+                        val updatedEmails = state.emails.map {
+                            if (it.id == emailId) it.copy(isRead = false) else it
+                        }
+                        // 去重处理
+                        val uniqueEmails = deduplicateEmails(updatedEmails, "markAsUnread")
+                        state.copy(emails = uniqueEmails)
                     }
                 },
                 onFailure = { error ->
@@ -578,14 +603,17 @@ class InboxViewModel @Inject constructor(
             result.fold(
                 onSuccess = {
                     _uiState.update { state ->
+                        val updatedEmails = state.emails.map { email ->
+                            if (email.id in selectedIds) {
+                                email.copy(isRead = isRead)
+                            } else {
+                                email
+                            }
+                        }
+                        // 去重处理
+                        val uniqueEmails = deduplicateEmails(updatedEmails, "markSelectedAsRead")
                         state.copy(
-                            emails = state.emails.map { email ->
-                                if (email.id in selectedIds) {
-                                    email.copy(isRead = isRead)
-                                } else {
-                                    email
-                                }
-                            },
+                            emails = uniqueEmails,
                             isMultiSelectMode = false,
                             selectedEmailIds = emptySet()
                         )

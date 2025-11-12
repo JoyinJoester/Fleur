@@ -265,4 +265,11 @@ interface EmailDao {
         limit: Int,
         offset: Int
     ): Flow<List<EmailEntity>>
+    
+    /**
+     * 删除所有测试邮件
+     * 删除ID以"test_email_"开头的邮件，用于清理测试数据
+     */
+    @Query("DELETE FROM emails WHERE id LIKE 'test_email_%'")
+    suspend fun deleteTestEmails(): Int
 }

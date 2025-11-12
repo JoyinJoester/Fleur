@@ -1,5 +1,6 @@
 package takagi.ru.fleur.data.repository
 
+import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -35,12 +36,31 @@ class EmailRepositoryImpl @Inject constructor(
 ) : EmailRepository {
     
     companion object {
+        private const val TAG = "EmailRepository"
         private const val DEFAULT_PAGE_SIZE = 50
         private val CACHE_DURATION = 30.days
+        
+        /**
+         * 对邮件列表进行去重，确保每个邮件ID只出现一次
+         * 如果发现重复，会记录警告日志
+         */
+        private fun deduplicateEmails(emails: List<Email>, source: String): List<Email> {
+            val originalSize = emails.size
+            val uniqueEmails = emails.distinctBy { it.id }
+            val duplicateCount = originalSize - uniqueEmails.size
+            
+            if (duplicateCount > 0) {
+                Log.w(TAG, "[$source] 发现 $duplicateCount 个重复邮件，原始数量: $originalSize, 去重后: ${uniqueEmails.size}")
+            }
+            
+            Log.d(TAG, "[$source] 邮件列表大小: ${uniqueEmails.size}")
+            return uniqueEmails
+        }
     }
     
     /**
      * 获取邮件列表（离线优先）
+     * 自动对结果进行去重，确保每个邮件ID只出现一次
      */
     override fun getEmails(
         accountId: String?,
@@ -53,12 +73,15 @@ class EmailRepositoryImpl @Inject constructor(
             limit = pageSize,
             offset = page * pageSize
         ).map { entities ->
-            Result.success(entities.map { entity ->
+            val emails = entities.map { entity ->
                 val attachments = attachmentDao.getAttachmentsByEmailId(entity.id)
                     .first()
                     .map { it.toDomain() }
                 entity.toDomain(attachments)
-            })
+            }
+            // 去重处理
+            val uniqueEmails = deduplicateEmails(emails, "getEmails")
+            Result.success(uniqueEmails)
         }.catch { e ->
             emit(Result.failure(FleurError.DatabaseError(e.message ?: "数据库错误")))
         }.collect { result ->
@@ -127,6 +150,7 @@ class EmailRepositoryImpl @Inject constructor(
     
     /**
      * 搜索邮件
+     * 自动对结果进行去重，确保每个邮件ID只出现一次
      */
     override fun searchEmails(
         query: String,
@@ -164,7 +188,9 @@ class EmailRepositoryImpl @Inject constructor(
                 filtered
             }
             
-            Result.success(finalFiltered)
+            // 去重处理
+            val uniqueEmails = deduplicateEmails(finalFiltered, "searchEmails")
+            Result.success(uniqueEmails)
         }.catch { e ->
             emit(Result.failure(FleurError.DatabaseError(e.message ?: "搜索失败")))
         }.collect { result ->
@@ -398,6 +424,7 @@ class EmailRepositoryImpl @Inject constructor(
     
     /**
      * 获取已发送邮件（分页）
+     * 自动对结果进行去重，确保每个邮件ID只出现一次
      */
     override fun getSentEmails(
         accountId: String,
@@ -409,12 +436,15 @@ class EmailRepositoryImpl @Inject constructor(
             limit = pageSize,
             offset = page * pageSize
         ).map { entities ->
-            Result.success(entities.map { entity ->
+            val emails = entities.map { entity ->
                 val attachments = attachmentDao.getAttachmentsByEmailId(entity.id)
                     .first()
                     .map { it.toDomain() }
                 entity.toDomain(attachments)
-            })
+            }
+            // 去重处理
+            val uniqueEmails = deduplicateEmails(emails, "getSentEmails")
+            Result.success(uniqueEmails)
         }.catch { e ->
             emit(Result.failure(FleurError.DatabaseError(e.message ?: "获取已发送邮件失败")))
         }.collect { result ->
@@ -424,6 +454,7 @@ class EmailRepositoryImpl @Inject constructor(
     
     /**
      * 获取草稿邮件（分页）
+     * 自动对结果进行去重，确保每个邮件ID只出现一次
      */
     override fun getDraftEmails(
         accountId: String,
@@ -435,12 +466,15 @@ class EmailRepositoryImpl @Inject constructor(
             limit = pageSize,
             offset = page * pageSize
         ).map { entities ->
-            Result.success(entities.map { entity ->
+            val emails = entities.map { entity ->
                 val attachments = attachmentDao.getAttachmentsByEmailId(entity.id)
                     .first()
                     .map { it.toDomain() }
                 entity.toDomain(attachments)
-            })
+            }
+            // 去重处理
+            val uniqueEmails = deduplicateEmails(emails, "getDraftEmails")
+            Result.success(uniqueEmails)
         }.catch { e ->
             emit(Result.failure(FleurError.DatabaseError(e.message ?: "获取草稿邮件失败")))
         }.collect { result ->
@@ -450,6 +484,7 @@ class EmailRepositoryImpl @Inject constructor(
     
     /**
      * 获取星标邮件（分页）
+     * 自动对结果进行去重，确保每个邮件ID只出现一次
      */
     override fun getStarredEmails(
         accountId: String,
@@ -461,12 +496,15 @@ class EmailRepositoryImpl @Inject constructor(
             limit = pageSize,
             offset = page * pageSize
         ).map { entities ->
-            Result.success(entities.map { entity ->
+            val emails = entities.map { entity ->
                 val attachments = attachmentDao.getAttachmentsByEmailId(entity.id)
                     .first()
                     .map { it.toDomain() }
                 entity.toDomain(attachments)
-            })
+            }
+            // 去重处理
+            val uniqueEmails = deduplicateEmails(emails, "getStarredEmails")
+            Result.success(uniqueEmails)
         }.catch { e ->
             emit(Result.failure(FleurError.DatabaseError(e.message ?: "获取星标邮件失败")))
         }.collect { result ->
@@ -476,6 +514,7 @@ class EmailRepositoryImpl @Inject constructor(
     
     /**
      * 获取归档邮件（分页）
+     * 自动对结果进行去重，确保每个邮件ID只出现一次
      */
     override fun getArchivedEmails(
         accountId: String,
@@ -487,12 +526,15 @@ class EmailRepositoryImpl @Inject constructor(
             limit = pageSize,
             offset = page * pageSize
         ).map { entities ->
-            Result.success(entities.map { entity ->
+            val emails = entities.map { entity ->
                 val attachments = attachmentDao.getAttachmentsByEmailId(entity.id)
                     .first()
                     .map { it.toDomain() }
                 entity.toDomain(attachments)
-            })
+            }
+            // 去重处理
+            val uniqueEmails = deduplicateEmails(emails, "getArchivedEmails")
+            Result.success(uniqueEmails)
         }.catch { e ->
             emit(Result.failure(FleurError.DatabaseError(e.message ?: "获取归档邮件失败")))
         }.collect { result ->
@@ -502,6 +544,7 @@ class EmailRepositoryImpl @Inject constructor(
     
     /**
      * 获取垃圾箱邮件（分页）
+     * 自动对结果进行去重，确保每个邮件ID只出现一次
      */
     override fun getTrashedEmails(
         accountId: String,
@@ -513,12 +556,15 @@ class EmailRepositoryImpl @Inject constructor(
             limit = pageSize,
             offset = page * pageSize
         ).map { entities ->
-            Result.success(entities.map { entity ->
+            val emails = entities.map { entity ->
                 val attachments = attachmentDao.getAttachmentsByEmailId(entity.id)
                     .first()
                     .map { it.toDomain() }
                 entity.toDomain(attachments)
-            })
+            }
+            // 去重处理
+            val uniqueEmails = deduplicateEmails(emails, "getTrashedEmails")
+            Result.success(uniqueEmails)
         }.catch { e ->
             emit(Result.failure(FleurError.DatabaseError(e.message ?: "获取垃圾箱邮件失败")))
         }.collect { result ->

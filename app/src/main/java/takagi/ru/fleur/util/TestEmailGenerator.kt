@@ -3,6 +3,7 @@ package takagi.ru.fleur.util
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import takagi.ru.fleur.data.local.entity.EmailEntity
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -13,6 +14,9 @@ import kotlin.time.Duration.Companion.minutes
  * 用于生成各种类型的测试邮件数据
  */
 object TestEmailGenerator {
+    
+    // 原子计数器，确保ID唯一性
+    private val idCounter = AtomicInteger(0)
     
     // 测试发件人列表
     private val senders = listOf(
@@ -133,6 +137,17 @@ object TestEmailGenerator {
     )
     
     /**
+     * 生成唯一的邮件ID
+     * 使用时间戳 + 原子计数器 + 随机数的组合确保唯一性
+     */
+    private fun generateUniqueId(): String {
+        val timestamp = System.currentTimeMillis()
+        val counter = idCounter.incrementAndGet()
+        val random = Random.nextInt(1000, 9999)
+        return "test_email_${timestamp}_${counter}_${random}"
+    }
+    
+    /**
      * 生成单条测试邮件
      * 
      * @param accountId 账户ID
@@ -143,11 +158,12 @@ object TestEmailGenerator {
      */
     fun generateEmail(
         accountId: String,
-        id: String = "test_email_${Random.nextInt(10000, 99999)}",
+        id: String? = null,
         isRead: Boolean? = null,
         isStarred: Boolean? = null,
         hoursAgo: Int? = null
     ): EmailEntity {
+        val uniqueId = id ?: generateUniqueId()
         val sender = senders.random()
         val subject = subjects.random()
         val body = bodies.random()
@@ -162,8 +178,8 @@ object TestEmailGenerator {
         }
         
         return EmailEntity(
-            id = id,
-            threadId = "thread_${id}",
+            id = uniqueId,
+            threadId = "thread_${uniqueId}",
             accountId = accountId,
             fromAddress = sender.second,
             fromName = sender.first,
@@ -199,7 +215,7 @@ object TestEmailGenerator {
             val isRead = Random.nextFloat() > unreadRatio
             generateEmail(
                 accountId = accountId,
-                id = "test_email_${System.currentTimeMillis()}_$index",
+                id = null, // 使用自动生成的唯一ID
                 isRead = isRead,
                 hoursAgo = index * 2 // 每封邮件间隔2小时
             )
@@ -225,8 +241,11 @@ object TestEmailGenerator {
             val sender = senders.random()
             val body = bodies.random()
             
+            // 为线程中的每封邮件生成唯一ID
+            val uniqueId = generateUniqueId()
+            
             EmailEntity(
-                id = "email_${threadId}_$index",
+                id = uniqueId,
                 threadId = threadId,
                 accountId = accountId,
                 fromAddress = sender.second,

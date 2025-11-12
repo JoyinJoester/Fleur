@@ -1,5 +1,6 @@
 package takagi.ru.fleur.ui.screens.inbox
 
+import android.util.Log
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -45,6 +46,8 @@ import takagi.ru.fleur.ui.components.SwipeableEmailItem
 import takagi.ru.fleur.ui.model.toUiModel
 import takagi.ru.fleur.ui.theme.FleurAnimation
 
+private const val TAG = "EmailListView"
+
 /**
  * 邮件列表视图（传统视图）
  * 使用 LazyColumn 显示邮件列表，支持交错进入动画和位置变化动画
@@ -75,6 +78,24 @@ fun EmailListView(
     val pullToRefreshState = rememberPullToRefreshState()
     val haptic = LocalHapticFeedback.current
     
+    // UI层最后的安全检查：对邮件列表进行去重
+    // 这是防止LazyColumn崩溃的最后一道防线
+    val uniqueEmails = remember(emails) {
+        val originalSize = emails.size
+        val deduped = emails.distinctBy { it.id }
+        val duplicateCount = originalSize - deduped.size
+        
+        if (duplicateCount > 0) {
+            Log.e(TAG, "UI层发现 $duplicateCount 个重复邮件！原始数量: $originalSize, 去重后: ${deduped.size}")
+            // 记录重复的邮件ID用于调试
+            val emailIds = emails.map { it.id }
+            val duplicateIds = emailIds.groupingBy { it }.eachCount().filter { it.value > 1 }
+            Log.e(TAG, "重复的邮件ID: $duplicateIds")
+        }
+        
+        deduped
+    }
+    
     // 检测滚动状态（用于延迟加载图片）
     val isScrolling by remember {
         derivedStateOf {
@@ -99,7 +120,7 @@ fun EmailListView(
     val shouldLoadMore by remember {
         derivedStateOf {
             val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null && lastVisibleItem.index >= emails.size - 5
+            lastVisibleItem != null && lastVisibleItem.index >= uniqueEmails.size - 5
         }
     }
     
@@ -132,7 +153,7 @@ fun EmailListView(
             .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
         // 显示骨架屏或邮件列表
-        if (isLoading && emails.isEmpty() && showSkeleton) {
+        if (isLoading && uniqueEmails.isEmpty() && showSkeleton) {
             // 首次加载显示骨架屏
             LazyColumn(
                 contentPadding = PaddingValues(vertical = 8.dp),
@@ -144,7 +165,7 @@ fun EmailListView(
                 }
             }
         } else {
-            // 显示邮件列表
+            // 显示邮件列表（使用去重后的列表）
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(vertical = 8.dp),
@@ -152,10 +173,10 @@ fun EmailListView(
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(
-                    items = emails,
+                    items = uniqueEmails,
                     key = { email -> email.id }
                 ) { email ->
-                    val index = emails.indexOf(email)
+                    val index = uniqueEmails.indexOf(email)
                     
                     // 交错淡入动画
                     val alpha by animateFloatAsState(
