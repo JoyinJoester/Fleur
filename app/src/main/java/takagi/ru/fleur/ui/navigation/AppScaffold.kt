@@ -74,7 +74,6 @@ fun AppScaffold(
                 )
             }
         ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()) {
             // 主导航内容
             NavGraph(
                 navController = navController,
@@ -85,49 +84,49 @@ fun AppScaffold(
                     .padding(paddingValues)
             )
             
-            // Navigation Drawer
-            FleurNavigationDrawer(
-                visible = drawerVisible,
-                currentAccount = currentAccount,
-                accounts = accounts,
-                unreadCounts = unreadCounts,
-                onDismiss = { drawerVisible = false },
-                onNavigateToInbox = {
-                    navController.navigate(Screen.Inbox.route) {
-                        popUpTo(Screen.Inbox.route) { inclusive = true }
-                    }
-                    selectedBottomItem = 0
-                },
-                onNavigateToSent = {
-                    navController.navigate(Screen.Sent.route)
-                    drawerVisible = false
-                },
-                onNavigateToDrafts = {
-                    navController.navigate(Screen.Drafts.route)
-                    drawerVisible = false
-                },
-                onNavigateToStarred = {
-                    navController.navigate(Screen.Starred.route)
-                    drawerVisible = false
-                },
-                onNavigateToArchive = {
-                    navController.navigate(Screen.Archive.route)
-                    drawerVisible = false
-                },
-                onNavigateToTrash = {
-                    navController.navigate(Screen.Trash.route)
-                    drawerVisible = false
-                },
-                onNavigateToSettings = {
-                    navController.navigate(Screen.Settings.route)
-                },
-                onNavigateToAccountManagement = {
-                    navController.navigate(Screen.AccountManagement.route)
-                },
-                onSwitchAccount = onSwitchAccount
-            )
-            }
         }
+        
+        // Navigation Drawer - 在 Scaffold 外层，覆盖所有内容
+        FleurNavigationDrawer(
+            visible = drawerVisible,
+            currentAccount = currentAccount,
+            accounts = accounts,
+            unreadCounts = unreadCounts,
+            onDismiss = { drawerVisible = false },
+            onNavigateToInbox = {
+                navController.navigate(Screen.Inbox.route) {
+                    popUpTo(Screen.Inbox.route) { inclusive = true }
+                }
+                selectedBottomItem = 0
+            },
+            onNavigateToSent = {
+                navController.navigate(Screen.Sent.route)
+                drawerVisible = false
+            },
+            onNavigateToDrafts = {
+                navController.navigate(Screen.Drafts.route)
+                drawerVisible = false
+            },
+            onNavigateToStarred = {
+                navController.navigate(Screen.Starred.route)
+                drawerVisible = false
+            },
+            onNavigateToArchive = {
+                navController.navigate(Screen.Archive.route)
+                drawerVisible = false
+            },
+            onNavigateToTrash = {
+                navController.navigate(Screen.Trash.route)
+                drawerVisible = false
+            },
+            onNavigateToSettings = {
+                navController.navigate(Screen.Settings.route)
+            },
+            onNavigateToAccountManagement = {
+                navController.navigate(Screen.AccountManagement.route)
+            },
+            onSwitchAccount = onSwitchAccount
+        )
         
         // 撰写邮件 Bottom Sheet - 在最外层，覆盖底部导航栏
         ComposeBottomSheet(
