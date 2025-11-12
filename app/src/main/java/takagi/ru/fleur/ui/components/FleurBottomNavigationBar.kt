@@ -2,6 +2,7 @@ package takagi.ru.fleur.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,10 +26,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Material 3 Extended 风格的底部导航栏
+ * Fleur 底部导航栏 - 完全重写版本
  * 
- * @param selectedItem 当前选中的项索引
- * @param onItemSelected 项目选中回调
+ * 采用双层结构确保正确处理系统导航栏区域：
+ * - 外层 Column: 扩展到系统导航栏区域，填充背景色
+ * - 内层 Box: 导航内容区域，应用圆角
+ * 
+ * @param selectedItem 当前选中的项索引 (0-3)
+ * @param onItemSelected 选中回调
  * @param modifier 修饰符
  */
 @Composable
@@ -66,31 +71,41 @@ fun FleurBottomNavigationBar(
         )
     }
     
+    // 使用 Surface 实现圆角和阴影效果
     Surface(
-        modifier = modifier
-            .fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        shadowElevation = 8.dp,
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(70.dp)
-                // 添加底部系统导航栏的内边距，避免黑色长条
                 .navigationBarsPadding()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
         ) {
-            items.forEach { item ->
-                BottomNavItemView(
-                    item = item,
-                    isSelected = selectedItem == item.index,
-                    onClick = { onItemSelected(item.index) },
-                    modifier = Modifier.weight(1f)
-                )
+            // 导航内容区域
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items.forEach { item ->
+                        NavigationItem(
+                            label = item.label,
+                            selectedIcon = item.selectedIcon,
+                            unselectedIcon = item.unselectedIcon,
+                            isSelected = selectedItem == item.index,
+                            onClick = { onItemSelected(item.index) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
         }
     }
@@ -107,22 +122,27 @@ private data class BottomNavItem(
 )
 
 /**
- * 单个底部导航项视图
+ * 单个导航项组件
  */
 @Composable
-private fun BottomNavItemView(
-    item: BottomNavItem,
+private fun NavigationItem(
+    label: String,
+    selectedIcon: ImageVector,
+    unselectedIcon: ImageVector,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     
-    // 动画
+    // 动画状态
     val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.1f else 1f,
-        animationSpec = tween(durationMillis = 200),
-        label = "scale"
+        targetValue = if (isSelected) 1.12f else 1f,
+        animationSpec = tween(
+            durationMillis = 250,
+            easing = FastOutSlowInEasing
+        ),
+        label = "iconScale"
     )
     
     val iconColor by animateColorAsState(
@@ -131,7 +151,10 @@ private fun BottomNavItemView(
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = tween(
+            durationMillis = 250,
+            easing = FastOutSlowInEasing
+        ),
         label = "iconColor"
     )
     
@@ -141,55 +164,51 @@ private fun BottomNavItemView(
         } else {
             Color.Transparent
         },
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = tween(
+            durationMillis = 250,
+            easing = FastOutSlowInEasing
+        ),
         label = "backgroundColor"
     )
     
-    Column(
+    val textColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = tween(
+            durationMillis = 250,
+            easing = FastOutSlowInEasing
+        ),
+        label = "textColor"
+    )
+    
+    Box(
         modifier = modifier
             .fillMaxHeight()
-            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
-            )
-            .padding(vertical = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            ),
+        contentAlignment = Alignment.Center
     ) {
         // 图标容器
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(48.dp)
                 .scale(scale)
                 .clip(CircleShape)
                 .background(backgroundColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                contentDescription = item.label,
+                imageVector = if (isSelected) selectedIcon else unselectedIcon,
+                contentDescription = label,
                 tint = iconColor,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
-        
-        Spacer(modifier = Modifier.height(4.dp))
-        
-        // 标签
-        Text(
-            text = item.label,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 10.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-            ),
-            color = if (isSelected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            maxLines = 1
-        )
     }
 }
