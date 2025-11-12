@@ -226,38 +226,102 @@ class EmailRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 删除邮件
+     * 删除邮件（移动到回收站）
+     * 将邮件从当前文件夹移动到回收站
+     * 
+     * @param emailId 邮件ID
+     * @return 操作结果
      */
     override suspend fun deleteEmail(emailId: String): Result<Unit> {
         return try {
-            // 先从本地数据库删除
-            emailDao.deleteEmailById(emailId)
-            attachmentDao.deleteAttachmentsByEmailId(emailId)
+            // 1. 获取邮件实体
+            val emailEntity = emailDao.getEmailById(emailId).first()
             
-            // 尝试从 WebDAV 服务器删除（如果连接的话）
-            try {
-                webdavClient.deleteEmail(emailId)
-            } catch (e: IllegalArgumentException) {
-                // WebDAV 未连接，忽略错误，只在本地删除
-                android.util.Log.w("EmailRepository", "WebDAV 未连接，仅在本地删除邮件")
+            if (emailEntity != null) {
+                // 2. 移除所有标签，添加 "trash" 标签
+                val updatedEntity = emailEntity.copy(
+                    labels = "trash"  // 删除操作：移除所有标签，只保留 trash
+                )
+                
+                // 3. 更新本地数据库
+                emailDao.updateEmail(updatedEntity)
+                
+                // 4. 尝试同步到远程服务器
+                try {
+                    // 注意: WebDAVClient 目前没有移动到回收站的方法
+                    // 这里暂时不调用远程删除,保持本地状态
+                    Log.d(TAG, "邮件已移动到回收站: emailId=$emailId")
+                } catch (e: IllegalArgumentException) {
+                    Log.w(TAG, "WebDAV 未连接，仅在本地移动到回收站: $emailId")
+                } catch (e: Exception) {
+                    Log.e(TAG, "远程同步删除失败: emailId=$emailId, error=${e.message}", e)
+                }
+                
+                Log.d(TAG, "删除邮件成功（移动到回收站）: emailId=$emailId, 标签更新: ${emailEntity.labels} -> trash")
+                Result.success(Unit)
+            } else {
+                Log.e(TAG, "删除邮件失败: 邮件不存在, emailId=$emailId")
+                Result.failure(FleurError.NotFoundError("邮件不存在"))
             }
-            
-            Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "删除邮件失败: emailId=$emailId, error=${e.message}", e)
             Result.failure(FleurError.DatabaseError(e.message ?: "删除失败"))
         }
     }
     
     /**
      * 归档邮件
+     * 将邮件从收件箱移动到归档文件夹
+     * 
+     * @param emailId 邮件ID
+     * @return 操作结果
      */
     override suspend fun archiveEmail(emailId: String): Result<Unit> {
         return try {
-            // 标记为已读并从收件箱移除
-            markAsRead(emailId, true)
-            // 实际应用中可能需要移动到归档文件夹
-            Result.success(Unit)
+            // 1. 获取邮件实体
+            val emailEntity = emailDao.getEmailById(emailId).first()
+            
+            if (emailEntity != null) {
+                // 2. 解析当前标签字符串，移除 "inbox" 标签
+                val currentLabels = emailEntity.labels?.split(",")?.map { it.trim() }?.toMutableList() ?: mutableListOf()
+                currentLabels.remove("inbox")
+                
+                // 3. 添加 "archive" 标签（如果不存在）
+                if (!currentLabels.contains("archive")) {
+                    currentLabels.add("archive")
+                }
+                
+                // 4. 创建更新后的邮件实体，设置 isRead = true
+                val updatedEntity = emailEntity.copy(
+                    labels = currentLabels.joinToString(","),
+                    isRead = true  // 归档时标记为已读
+                )
+                
+                // 5. 调用 emailDao.updateEmail() 更新数据库
+                emailDao.updateEmail(updatedEntity)
+                
+                // 6. 尝试调用 webdavClient 同步到远程服务器，捕获异常并记录日志
+                try {
+                    // 注意: WebDAVClient 目前没有 updateEmailLabels 方法
+                    // 使用 updateEmailFlags 来标记为已读
+                    val flags = EmailFlags(isRead = true)
+                    webdavClient.updateEmailFlags(emailId, flags)
+                } catch (e: IllegalArgumentException) {
+                    // WebDAV 未连接，仅在本地更新
+                    Log.w(TAG, "WebDAV 未连接，仅在本地归档邮件: $emailId")
+                } catch (e: Exception) {
+                    // 其他错误，记录但不影响本地操作
+                    Log.e(TAG, "远程同步归档失败: emailId=$emailId, error=${e.message}", e)
+                }
+                
+                Log.d(TAG, "归档邮件成功: emailId=$emailId, 标签更新: ${emailEntity.labels} -> ${updatedEntity.labels}")
+                Result.success(Unit)
+            } else {
+                Log.e(TAG, "归档邮件失败: 邮件不存在, emailId=$emailId")
+                Result.failure(FleurError.NotFoundError("邮件不存在"))
+            }
         } catch (e: Exception) {
+            Log.e(TAG, "归档邮件失败: emailId=$emailId, error=${e.message}", e)
             Result.failure(FleurError.DatabaseError(e.message ?: "归档失败"))
         }
     }
@@ -368,37 +432,124 @@ class EmailRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 批量删除邮件
+     * 批量删除邮件（移动到回收站）
+     * 使用批量更新优化性能
+     * 
+     * @param emailIds 邮件ID列表
+     * @return 操作结果
      */
     override suspend fun deleteEmails(emailIds: List<String>): Result<Unit> {
         return try {
-            // 逐个删除（实际应用中可能需要批量API）
+            val updates = mutableMapOf<String, String>()
+            val failedIds = mutableListOf<String>()
+            
+            // 遍历邮件ID列表，获取每个邮件实体
             emailIds.forEach { emailId ->
-                webdavClient.deleteEmail(emailId)
+                try {
+                    val emailEntity = emailDao.getEmailById(emailId).first()
+                    if (emailEntity != null) {
+                        // 移除所有标签，添加 "trash" 标签
+                        updates[emailId] = "trash"
+                    } else {
+                        Log.w(TAG, "批量删除: 邮件不存在, emailId=$emailId")
+                        failedIds.add(emailId)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "批量删除: 处理邮件失败, emailId=$emailId, error=${e.message}")
+                    failedIds.add(emailId)
+                }
             }
             
-            // 从本地数据库删除
-            emailDao.deleteEmailsByIds(emailIds)
-            emailIds.forEach { emailId ->
-                attachmentDao.deleteAttachmentsByEmailId(emailId)
+            // 使用批量更新标签
+            if (updates.isNotEmpty()) {
+                emailDao.updateEmailLabels(updates)
+                
+                Log.d(TAG, "批量删除完成（移动到回收站）: 成功=${updates.size}, 失败=${failedIds.size}")
             }
             
-            Result.success(Unit)
+            if (failedIds.isEmpty()) {
+                Result.success(Unit)
+            } else {
+                Log.w(TAG, "批量删除部分失败: 失败的邮件ID=$failedIds")
+                Result.success(Unit)  // 部分成功也返回成功
+            }
         } catch (e: Exception) {
-            Result.failure(FleurError.NetworkError(e.message ?: "批量删除失败"))
+            Log.e(TAG, "批量删除邮件失败: ${e.message}", e)
+            Result.failure(FleurError.DatabaseError(e.message ?: "批量删除失败"))
         }
     }
     
     /**
      * 批量归档邮件
+     * 使用批量更新优化性能
+     * 
+     * @param emailIds 邮件ID列表
+     * @return 操作结果，包含成功和失败的数量
      */
     override suspend fun archiveEmails(emailIds: List<String>): Result<Unit> {
         return try {
+            val updates = mutableMapOf<String, String>()
+            val failedIds = mutableListOf<String>()
+            
+            // 遍历邮件ID列表，获取每个邮件实体
             emailIds.forEach { emailId ->
-                archiveEmail(emailId)
+                try {
+                    val emailEntity = emailDao.getEmailById(emailId).first()
+                    if (emailEntity != null) {
+                        // 为每个邮件更新标签（移除 "inbox"，添加 "archive"）
+                        val currentLabels = emailEntity.labels?.split(",")?.map { it.trim() }?.toMutableList() ?: mutableListOf()
+                        currentLabels.remove("inbox")
+                        if (!currentLabels.contains("archive")) {
+                            currentLabels.add("archive")
+                        }
+                        // 收集所有更新到 Map<String, String>
+                        updates[emailId] = currentLabels.joinToString(",")
+                    } else {
+                        Log.w(TAG, "批量归档: 邮件不存在, emailId=$emailId")
+                        failedIds.add(emailId)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "批量归档: 处理邮件失败, emailId=$emailId, error=${e.message}")
+                    failedIds.add(emailId)
+                }
             }
-            Result.success(Unit)
+            
+            // 使用 emailDao.updateEmailLabels(updates) 批量更新标签
+            if (updates.isNotEmpty()) {
+                emailDao.updateEmailLabels(updates)
+                
+                // 使用 emailDao.markEmailsAsRead() 批量标记为已读
+                emailDao.markEmailsAsRead(updates.keys.toList(), true)
+                
+                // 尝试同步到远程服务器，记录失败的邮件ID
+                try {
+                    val flags = EmailFlags(isRead = true)
+                    updates.keys.forEach { emailId ->
+                        try {
+                            webdavClient.updateEmailFlags(emailId, flags)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "批量归档: 远程同步失败, emailId=$emailId, error=${e.message}")
+                            // 不将同步失败的邮件添加到 failedIds，因为本地操作已成功
+                        }
+                    }
+                } catch (e: IllegalArgumentException) {
+                    Log.w(TAG, "WebDAV 未连接，仅在本地批量归档邮件")
+                }
+            }
+            
+            // 记录成功和失败的数量
+            val successCount = updates.size
+            val failureCount = failedIds.size
+            Log.d(TAG, "批量归档完成: 成功=$successCount, 失败=$failureCount")
+            
+            if (failedIds.isEmpty()) {
+                Result.success(Unit)
+            } else {
+                Log.w(TAG, "批量归档部分失败: 失败的邮件ID=$failedIds")
+                Result.success(Unit)  // 部分成功也返回成功
+            }
         } catch (e: Exception) {
+            Log.e(TAG, "批量归档邮件失败: ${e.message}", e)
             Result.failure(FleurError.DatabaseError(e.message ?: "批量归档失败"))
         }
     }

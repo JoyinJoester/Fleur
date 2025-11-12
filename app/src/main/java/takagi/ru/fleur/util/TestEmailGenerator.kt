@@ -195,7 +195,7 @@ object TestEmailGenerator {
             timestamp = timestamp.toEpochMilliseconds(),
             isRead = isRead ?: Random.nextBoolean(),
             isStarred = isStarred ?: (Random.nextInt(100) < 20), // 20%概率星标
-            labels = null
+            labels = "inbox"  // 新邮件默认在收件箱
         )
     }
     
@@ -262,7 +262,7 @@ object TestEmailGenerator {
                 timestamp = now.minus((messageCount - index).days).toEpochMilliseconds(),
                 isRead = index < messageCount, // 最后一封未读
                 isStarred = false,
-                labels = null
+                labels = "inbox"  // 新邮件默认在收件箱
             )
         }
     }

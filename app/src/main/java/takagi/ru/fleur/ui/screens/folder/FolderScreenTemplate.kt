@@ -202,6 +202,9 @@ fun FolderScreenTemplate(
                     },
                     onMarkRead = {
                         onBatchAction(uiState.selectedEmailIds.toList(), EmailAction.MARK_READ)
+                    },
+                    onMarkUnread = {
+                        onBatchAction(uiState.selectedEmailIds.toList(), EmailAction.MARK_UNREAD)
                     }
                 )
             } else {
@@ -354,6 +357,15 @@ fun FolderScreenTemplate(
                                     }
                                 },
                                 onSwipeAction = { action ->
+                                    onEmailAction(email.id, action)
+                                },
+                                onStar = {
+                                    // 根据当前星标状态切换：已标星则取消，未标星则添加
+                                    val action = if (email.isStarred) {
+                                        EmailAction.UNSTAR
+                                    } else {
+                                        EmailAction.STAR
+                                    }
                                     onEmailAction(email.id, action)
                                 },
                                 modifier = Modifier.alpha(alpha)

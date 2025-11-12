@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MarkEmailRead
+import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +25,7 @@ import androidx.compose.ui.Modifier
  * @param onDelete 删除回调
  * @param onArchive 归档回调
  * @param onMarkRead 标记已读回调
+ * @param onMarkUnread 标记未读回调
  * @param modifier 修饰符
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,6 +36,7 @@ fun MultiSelectTopBar(
     onDelete: () -> Unit,
     onArchive: () -> Unit,
     onMarkRead: () -> Unit,
+    onMarkUnread: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -58,6 +61,17 @@ fun MultiSelectTopBar(
                 Icon(
                     imageVector = Icons.Default.MarkEmailRead,
                     contentDescription = "标记已读"
+                )
+            }
+            
+            // 标记未读按钮
+            IconButton(
+                onClick = onMarkUnread,
+                enabled = selectedCount > 0
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MarkEmailUnread,
+                    contentDescription = "标记未读"
                 )
             }
             

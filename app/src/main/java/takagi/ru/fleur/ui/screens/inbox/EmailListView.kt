@@ -210,6 +210,7 @@ fun EmailListView(
                                 else -> {}
                             }
                         },
+                        onStar = { onStar(email.id) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .alpha(alpha)

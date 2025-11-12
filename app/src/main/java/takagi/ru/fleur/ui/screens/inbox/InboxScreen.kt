@@ -114,7 +114,8 @@ fun InboxScreen(
                     onClose = { viewModel.exitMultiSelectMode() },
                     onDelete = { viewModel.deleteSelectedEmails() },
                     onArchive = { viewModel.archiveSelectedEmails() },
-                    onMarkAsRead = { viewModel.markSelectedAsRead(true) }
+                    onMarkAsRead = { viewModel.markSelectedAsRead(true) },
+                    onMarkAsUnread = { viewModel.markSelectedAsRead(false) }
                 )
             } else {
                 InboxTopAppBar(
@@ -122,7 +123,9 @@ fun InboxScreen(
                     onSearchClick = onNavigateToSearch,
                     onAccountClick = onNavigateToAccountManagement,
                     onFilterClick = { showAccountFilter = true },
-                    scrollBehavior = scrollBehavior // 传递滚动行为以实现阴影效果
+                    scrollBehavior = scrollBehavior, // 传递滚动行为以实现阴影效果
+                    searchQuery = uiState.searchQuery,
+                    onSearchQueryChange = { query -> viewModel.updateSearchQuery(query) }
                 )
             }
         },
@@ -253,6 +256,8 @@ private fun InboxTopAppBar(
     onAccountClick: () -> Unit,
     onFilterClick: () -> Unit,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior? = null,
+    searchQuery: String = "",
+    onSearchQueryChange: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -261,38 +266,32 @@ private fun InboxTopAppBar(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 搜索框（占据大部分宽度，M3E优化：48dp高度）
-                Box(
+                // 搜索框（占据大部分宽度，M3E优化：56dp高度以完整显示文字）
+                TextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    placeholder = {
+                        Text("搜索邮件")
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "搜索"
+                        )
+                    },
                     modifier = Modifier
                         .weight(1f)
-                        .size(height = 48.dp, width = 0.dp)
-                ) {
-                    TextField(
-                        value = "",
-                        onValueChange = {},
-                        placeholder = {
-                            Text("搜索邮件")
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "搜索"
-                            )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSearchClick() },
-                        enabled = false, // 点击时跳转到搜索页面
-                        shape = RoundedCornerShape(24.dp), // 完全圆角
-                        colors = TextFieldDefaults.colors(
-                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            disabledIndicatorColor = Color.Transparent
-                        ),
-                        singleLine = true
-                    )
-                }
-                
-                Spacer(modifier = Modifier.width(8.dp))
+                        .padding(end = 8.dp),
+                    shape = RoundedCornerShape(28.dp), // 完全圆角
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    ),
+                    singleLine = true
+                )
                 
                 // 头像按钮（40dp圆形）
                 Box(

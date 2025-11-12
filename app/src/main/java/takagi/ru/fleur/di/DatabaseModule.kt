@@ -12,7 +12,9 @@ import takagi.ru.fleur.data.local.dao.AccountDao
 import takagi.ru.fleur.data.local.dao.AttachmentDao
 import takagi.ru.fleur.data.local.dao.EmailDao
 import takagi.ru.fleur.data.local.dao.PendingOperationDao
+import takagi.ru.fleur.data.local.dao.SyncQueueDao
 import takagi.ru.fleur.data.local.migration.MIGRATION_2_3
+import takagi.ru.fleur.data.local.migration.MIGRATION_3_4
 import javax.inject.Singleton
 
 /**
@@ -33,7 +35,7 @@ object DatabaseModule {
             FleurDatabase::class.java,
             FleurDatabase.DATABASE_NAME
         )
-            .addMigrations(MIGRATION_2_3) // 添加迁移策略
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4) // 添加迁移策略
             .fallbackToDestructiveMigration() // 开发阶段使用，如果迁移失败则重建
             .build()
     }
@@ -60,5 +62,11 @@ object DatabaseModule {
     @Singleton
     fun providePendingOperationDao(database: FleurDatabase): PendingOperationDao {
         return database.pendingOperationDao()
+    }
+    
+    @Provides
+    @Singleton
+    fun provideSyncQueueDao(database: FleurDatabase): SyncQueueDao {
+        return database.syncQueueDao()
     }
 }

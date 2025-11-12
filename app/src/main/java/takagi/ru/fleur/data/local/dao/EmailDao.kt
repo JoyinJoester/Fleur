@@ -18,7 +18,8 @@ import takagi.ru.fleur.data.local.entity.EmailEntity
 interface EmailDao {
     
     /**
-     * 分页查询邮件
+     * 分页查询收件箱邮件
+     * 只返回带有 "inbox" 标签的邮件
      * @param accountId 账户ID，null表示所有账户
      * @param limit 每页数量
      * @param offset 偏移量
@@ -26,6 +27,7 @@ interface EmailDao {
     @Query("""
         SELECT * FROM emails 
         WHERE (:accountId IS NULL OR account_id = :accountId)
+        AND (labels LIKE '%inbox%' OR labels IS NULL OR labels = '')
         ORDER BY timestamp DESC 
         LIMIT :limit OFFSET :offset
     """)
@@ -272,4 +274,23 @@ interface EmailDao {
      */
     @Query("DELETE FROM emails WHERE id LIKE 'test_email_%'")
     suspend fun deleteTestEmails(): Int
+    
+    /**
+     * 更新邮件标签
+     * @param emailId 邮件ID
+     * @param labels 新的标签字符串（逗号分隔）
+     */
+    @Query("UPDATE emails SET labels = :labels WHERE id = :emailId")
+    suspend fun updateEmailLabels(emailId: String, labels: String)
+    
+    /**
+     * 批量更新邮件标签
+     * @param updates 邮件ID到标签的映射
+     */
+    @Transaction
+    suspend fun updateEmailLabels(updates: Map<String, String>) {
+        updates.forEach { (emailId, labels) ->
+            updateEmailLabels(emailId, labels)
+        }
+    }
 }

@@ -49,6 +49,13 @@ fun EmailChatView(
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
     
+    // 检测滚动状态（用于性能优化）
+    val isScrolling by remember {
+        derivedStateOf {
+            listState.isScrollInProgress
+        }
+    }
+    
     // 按线程分组邮件
     val emailsByThread = remember(emails) {
         emails.groupBy { it.threadId }

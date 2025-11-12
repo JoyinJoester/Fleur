@@ -203,11 +203,46 @@ class FolderViewModel @Inject constructor(
                         )
                     }
                     
-                    // 从列表中移除邮件（视觉反馈）
-                    _uiState.update { currentState ->
-                        currentState.copy(
-                            emails = currentState.emails.filter { it.id != emailId }
-                        )
+                    // 根据操作类型更新 UI
+                    when (action) {
+                        EmailAction.STAR, EmailAction.UNSTAR -> {
+                            // 标星/取消标星：更新邮件状态而不是移除
+                            val newStarredState = action == EmailAction.STAR
+                            _uiState.update { currentState ->
+                                currentState.copy(
+                                    emails = currentState.emails.map { email ->
+                                        if (email.id == emailId) {
+                                            email.copy(isStarred = newStarredState)
+                                        } else {
+                                            email
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        EmailAction.MARK_READ, EmailAction.MARK_UNREAD -> {
+                            // 标记已读/未读：更新邮件状态而不是移除
+                            val newReadState = action == EmailAction.MARK_READ
+                            _uiState.update { currentState ->
+                                currentState.copy(
+                                    emails = currentState.emails.map { email ->
+                                        if (email.id == emailId) {
+                                            email.copy(isRead = newReadState)
+                                        } else {
+                                            email
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        else -> {
+                            // 其他操作（删除、归档、恢复等）：从列表中移除邮件
+                            _uiState.update { currentState ->
+                                currentState.copy(
+                                    emails = currentState.emails.filter { it.id != emailId }
+                                )
+                            }
+                        }
                     }
                     
                     // 如果显示撤销 Snackbar，设置自动隐藏
@@ -267,11 +302,46 @@ class FolderViewModel @Inject constructor(
                         )
                     }
                     
-                    // 从列表中移除邮件
-                    _uiState.update { currentState ->
-                        currentState.copy(
-                            emails = currentState.emails.filter { it.id !in emailIds }
-                        )
+                    // 根据操作类型更新 UI
+                    when (action) {
+                        EmailAction.STAR, EmailAction.UNSTAR -> {
+                            // 标星/取消标星：更新邮件状态而不是移除
+                            val newStarredState = action == EmailAction.STAR
+                            _uiState.update { currentState ->
+                                currentState.copy(
+                                    emails = currentState.emails.map { email ->
+                                        if (email.id in emailIds) {
+                                            email.copy(isStarred = newStarredState)
+                                        } else {
+                                            email
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        EmailAction.MARK_READ, EmailAction.MARK_UNREAD -> {
+                            // 标记已读/未读：更新邮件状态而不是移除
+                            val newReadState = action == EmailAction.MARK_READ
+                            _uiState.update { currentState ->
+                                currentState.copy(
+                                    emails = currentState.emails.map { email ->
+                                        if (email.id in emailIds) {
+                                            email.copy(isRead = newReadState)
+                                        } else {
+                                            email
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        else -> {
+                            // 其他操作（删除、归档、恢复等）：从列表中移除邮件
+                            _uiState.update { currentState ->
+                                currentState.copy(
+                                    emails = currentState.emails.filter { it.id !in emailIds }
+                                )
+                            }
+                        }
                     }
                     
                     // 设置自动隐藏 Snackbar

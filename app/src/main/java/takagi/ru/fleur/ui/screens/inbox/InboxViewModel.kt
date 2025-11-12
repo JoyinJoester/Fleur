@@ -160,12 +160,26 @@ class InboxViewModel @Inject constructor(
                                 val updatedEmails = if (reset) {
                                     newEmails
                                 } else {
-                                    state.emails + newEmails
+                                    state.allEmails + newEmails
                                 }
                                 // 去重处理，确保邮件ID唯一
                                 val uniqueEmails = deduplicateEmails(updatedEmails, "loadEmails")
+                                
+                                // 如果有搜索查询，过滤邮件
+                                val displayEmails = if (state.searchQuery.isBlank()) {
+                                    uniqueEmails
+                                } else {
+                                    uniqueEmails.filter { email ->
+                                        email.subject.contains(state.searchQuery, ignoreCase = true) ||
+                                        email.from.name?.contains(state.searchQuery, ignoreCase = true) == true ||
+                                        email.from.address.contains(state.searchQuery, ignoreCase = true) ||
+                                        email.bodyPreview.contains(state.searchQuery, ignoreCase = true)
+                                    }
+                                }
+                                
                                 state.copy(
-                                    emails = uniqueEmails,
+                                    allEmails = uniqueEmails,
+                                    emails = displayEmails,
                                     isLoading = false,
                                     hasMorePages = newEmails.size >= PAGE_SIZE
                                 )
@@ -350,12 +364,17 @@ class InboxViewModel @Inject constructor(
             val result = archiveEmailUseCase(emailId)
             result.fold(
                 onSuccess = {
-                    // 从列表中移除已归档的邮件
+                    // 从列表中移除已归档的邮件（同时更新 allEmails 和 emails）
                     _uiState.update { state ->
-                        state.copy(emails = state.emails.filter { it.id != emailId })
+                        state.copy(
+                            allEmails = state.allEmails.filter { it.id != emailId },
+                            emails = state.emails.filter { it.id != emailId }
+                        )
                     }
+                    Log.d(TAG, "归档邮件成功，已从UI列表中移除: emailId=$emailId")
                 },
                 onFailure = { error ->
+                    Log.e(TAG, "归档邮件失败: emailId=$emailId, error=${error.message}")
                     _uiState.update {
                         it.copy(
                             error = error as? FleurError
@@ -375,12 +394,17 @@ class InboxViewModel @Inject constructor(
             val result = deleteEmailUseCase(emailId)
             result.fold(
                 onSuccess = {
-                    // 从列表中移除已删除的邮件
+                    // 从列表中移除已删除的邮件（同时更新 allEmails 和 emails）
                     _uiState.update { state ->
-                        state.copy(emails = state.emails.filter { it.id != emailId })
+                        state.copy(
+                            allEmails = state.allEmails.filter { it.id != emailId },
+                            emails = state.emails.filter { it.id != emailId }
+                        )
                     }
+                    Log.d(TAG, "删除邮件成功，已从UI列表中移除: emailId=$emailId")
                 },
                 onFailure = { error ->
+                    Log.e(TAG, "删除邮件失败: emailId=$emailId, error=${error.message}")
                     _uiState.update {
                         it.copy(
                             error = error as? FleurError
@@ -394,27 +418,44 @@ class InboxViewModel @Inject constructor(
     
     /**
      * 切换星标
+     * 使用乐观UI更新策略：立即更新UI，失败时回滚
+     * 确保状态更新在200ms内完成
      */
     fun toggleStar(emailId: String) {
         viewModelScope.launch {
             val email = _uiState.value.emails.find { it.id == emailId }
             if (email != null) {
-                val result = toggleStarUseCase(emailId, !email.isStarred)
+                val originalStarredState = email.isStarred
+                val newStarredState = !originalStarredState
+                
+                // 乐观UI更新：立即更新UI状态
+                _uiState.update { state ->
+                    val updatedEmails = state.emails.map {
+                        if (it.id == emailId) it.copy(isStarred = newStarredState) else it
+                    }
+                    // 去重处理，确保邮件ID唯一
+                    val uniqueEmails = deduplicateEmails(updatedEmails, "toggleStar")
+                    state.copy(emails = uniqueEmails)
+                }
+                
+                // 异步执行实际的星标操作
+                val result = toggleStarUseCase(emailId, newStarredState)
                 result.fold(
                     onSuccess = {
-                        // 更新列表中的邮件状态
-                        _uiState.update { state ->
-                            val updatedEmails = state.emails.map {
-                                if (it.id == emailId) it.copy(isStarred = !it.isStarred) else it
-                            }
-                            // 去重处理
-                            val uniqueEmails = deduplicateEmails(updatedEmails, "toggleStar")
-                            state.copy(emails = uniqueEmails)
-                        }
+                        // 操作成功，UI已经更新，无需额外操作
+                        Log.d(TAG, "星标操作成功: emailId=$emailId, isStarred=$newStarredState")
                     },
                     onFailure = { error ->
-                        _uiState.update {
-                            it.copy(
+                        // 操作失败，回滚UI状态
+                        Log.e(TAG, "星标操作失败，回滚状态: emailId=$emailId", error as? Throwable)
+                        _uiState.update { state ->
+                            val revertedEmails = state.emails.map {
+                                if (it.id == emailId) it.copy(isStarred = originalStarredState) else it
+                            }
+                            // 去重处理
+                            val uniqueEmails = deduplicateEmails(revertedEmails, "toggleStar-rollback")
+                            state.copy(
+                                emails = uniqueEmails,
                                 error = error as? FleurError
                                     ?: FleurError.UnknownError(error.message ?: "星标操作失败")
                             )
@@ -433,14 +474,21 @@ class InboxViewModel @Inject constructor(
             val result = markAsReadUseCase(emailId, true)
             result.fold(
                 onSuccess = {
-                    // 更新列表中的邮件状态
+                    // 同时更新 allEmails 和 emails，确保数据一致性
                     _uiState.update { state ->
+                        val updatedAllEmails = state.allEmails.map {
+                            if (it.id == emailId) it.copy(isRead = true) else it
+                        }
                         val updatedEmails = state.emails.map {
                             if (it.id == emailId) it.copy(isRead = true) else it
                         }
                         // 去重处理
+                        val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markAsRead-allEmails")
                         val uniqueEmails = deduplicateEmails(updatedEmails, "markAsRead")
-                        state.copy(emails = uniqueEmails)
+                        state.copy(
+                            allEmails = uniqueAllEmails,
+                            emails = uniqueEmails
+                        )
                     }
                 },
                 onFailure = { error ->
@@ -463,14 +511,21 @@ class InboxViewModel @Inject constructor(
             val result = markAsReadUseCase(emailId, false)
             result.fold(
                 onSuccess = {
-                    // 更新列表中的邮件状态
+                    // 同时更新 allEmails 和 emails，确保数据一致性
                     _uiState.update { state ->
+                        val updatedAllEmails = state.allEmails.map {
+                            if (it.id == emailId) it.copy(isRead = false) else it
+                        }
                         val updatedEmails = state.emails.map {
                             if (it.id == emailId) it.copy(isRead = false) else it
                         }
                         // 去重处理
+                        val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markAsUnread-allEmails")
                         val uniqueEmails = deduplicateEmails(updatedEmails, "markAsUnread")
-                        state.copy(emails = uniqueEmails)
+                        state.copy(
+                            allEmails = uniqueAllEmails,
+                            emails = uniqueEmails
+                        )
                     }
                 },
                 onFailure = { error ->
@@ -603,6 +658,14 @@ class InboxViewModel @Inject constructor(
             result.fold(
                 onSuccess = {
                     _uiState.update { state ->
+                        // 同时更新 allEmails 和 emails，确保数据一致性
+                        val updatedAllEmails = state.allEmails.map { email ->
+                            if (email.id in selectedIds) {
+                                email.copy(isRead = isRead)
+                            } else {
+                                email
+                            }
+                        }
                         val updatedEmails = state.emails.map { email ->
                             if (email.id in selectedIds) {
                                 email.copy(isRead = isRead)
@@ -611,8 +674,10 @@ class InboxViewModel @Inject constructor(
                             }
                         }
                         // 去重处理
+                        val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markSelectedAsRead-allEmails")
                         val uniqueEmails = deduplicateEmails(updatedEmails, "markSelectedAsRead")
                         state.copy(
+                            allEmails = uniqueAllEmails,
                             emails = uniqueEmails,
                             isMultiSelectMode = false,
                             selectedEmailIds = emptySet()
@@ -636,6 +701,40 @@ class InboxViewModel @Inject constructor(
      */
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+    
+    /**
+     * 更新搜索查询并过滤邮件
+     */
+    fun updateSearchQuery(query: String) {
+        _uiState.update { state ->
+            val filteredEmails = if (query.isBlank()) {
+                state.allEmails
+            } else {
+                state.allEmails.filter { email ->
+                    email.subject.contains(query, ignoreCase = true) ||
+                    email.from.name?.contains(query, ignoreCase = true) == true ||
+                    email.from.address.contains(query, ignoreCase = true) ||
+                    email.bodyPreview.contains(query, ignoreCase = true)
+                }
+            }
+            state.copy(
+                searchQuery = query,
+                emails = filteredEmails
+            )
+        }
+    }
+    
+    /**
+     * 清除搜索
+     */
+    fun clearSearch() {
+        _uiState.update { state ->
+            state.copy(
+                searchQuery = "",
+                emails = state.allEmails
+            )
+        }
     }
     
     /**

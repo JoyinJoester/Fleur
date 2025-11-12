@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MarkEmailRead
+import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,7 @@ fun MultiSelectToolbar(
     onDelete: () -> Unit,
     onArchive: () -> Unit,
     onMarkAsRead: () -> Unit,
+    onMarkAsUnread: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -76,6 +78,14 @@ fun MultiSelectToolbar(
                     Icon(
                         imageVector = Icons.Default.MarkEmailRead,
                         contentDescription = "标记为已读",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                
+                IconButton(onClick = onMarkAsUnread) {
+                    Icon(
+                        imageVector = Icons.Default.MarkEmailUnread,
+                        contentDescription = "标记为未读",
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }

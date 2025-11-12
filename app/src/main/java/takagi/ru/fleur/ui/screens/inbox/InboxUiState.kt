@@ -24,7 +24,9 @@ data class InboxUiState(
     val isOffline: Boolean = false,
     val pendingOperationCount: Int = 0,
     val swipeRightAction: takagi.ru.fleur.domain.model.SwipeAction = takagi.ru.fleur.domain.model.SwipeAction.ARCHIVE,
-    val swipeLeftAction: takagi.ru.fleur.domain.model.SwipeAction = takagi.ru.fleur.domain.model.SwipeAction.DELETE
+    val swipeLeftAction: takagi.ru.fleur.domain.model.SwipeAction = takagi.ru.fleur.domain.model.SwipeAction.DELETE,
+    val searchQuery: String = "",
+    val allEmails: List<Email> = emptyList() // 保存未过滤的邮件列表
 )
 
 /**

@@ -75,6 +75,7 @@ fun SwipeableEmailItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     onSwipeAction: (takagi.ru.fleur.ui.screens.folder.EmailAction) -> Unit,
+    onStar: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -88,6 +89,7 @@ fun SwipeableEmailItem(
             isScrolling = isScrolling,
             onItemClick = onClick,
             onItemLongClick = onLongClick,
+            onStar = onStar,
             modifier = modifier
         )
         return
@@ -156,7 +158,8 @@ fun SwipeableEmailItem(
                 isSelected = isSelected,
                 isScrolling = isScrolling,
                 onItemClick = onClick,
-                onItemLongClick = onLongClick
+                onItemLongClick = onLongClick,
+                onStar = onStar
             )
         }
     )

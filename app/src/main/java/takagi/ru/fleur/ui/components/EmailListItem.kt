@@ -1,11 +1,18 @@
 package takagi.ru.fleur.ui.components
 
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -21,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import takagi.ru.fleur.domain.model.Email
+import takagi.ru.fleur.ui.theme.FleurAnimation
 import kotlinx.datetime.Instant
 import kotlinx.datetime.toJavaInstant
 import java.text.SimpleDateFormat
@@ -71,27 +79,51 @@ fun EmailListItem(
             pressedElevation = 2.dp
         )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
-            // 头像
-            AvatarWithInitial(
-                name = email.from.name ?: email.from.address,
-                showPlaceholder = false, // 始终显示头像，不使用占位符
-                modifier = Modifier.size(48.dp)
-            )
-            
-            Spacer(modifier = Modifier.width(12.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 未读指示器（条件显示，带淡入淡出动画）
+                AnimatedVisibility(
+                    visible = !email.isRead,
+                    enter = fadeIn(
+                        animationSpec = tween(
+                            durationMillis = FleurAnimation.FAST_DURATION,
+                            easing = FleurAnimation.FastOutSlowIn
+                        )
+                    ),
+                    exit = fadeOut(
+                        animationSpec = tween(
+                            durationMillis = FleurAnimation.FAST_DURATION,
+                            easing = FleurAnimation.FastOutSlowIn
+                        )
+                    )
+                ) {
+                    UnreadIndicator(
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
+                
+                // 头像
+                AvatarWithInitial(
+                    name = email.from.name ?: email.from.address,
+                    showPlaceholder = false, // 始终显示头像，不使用占位符
+                    modifier = Modifier.size(48.dp)
+                )
+                
+                Spacer(modifier = Modifier.width(12.dp))
             
             // 邮件内容
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                // 第一行：发件人和时间
+                // 第一行：发件人和时间/星标列
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -102,17 +134,21 @@ fun EmailListItem(
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontWeight = if (!email.isRead) FontWeight.Bold else FontWeight.Normal
                         ),
-                        color = MaterialTheme.colorScheme.onSurface,
+                        // 未读：使用onSurface（高对比度），已读：使用onSurfaceVariant（较淡）
+                        color = if (!email.isRead) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
                     
-                    Text(
-                        text = formatTimestamp(email.timestamp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    // 时间戳
+                    TimeStamp(timestamp = email.timestamp)
                 }
                 
                 // 第二行：主题
@@ -121,7 +157,12 @@ fun EmailListItem(
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = if (!email.isRead) FontWeight.SemiBold else FontWeight.Normal
                     ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // 未读：使用onSurface（高对比度），已读：使用onSurfaceVariant（较淡）
+                    color = if (!email.isRead) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -130,19 +171,40 @@ fun EmailListItem(
                 Text(
                     text = email.bodyPreview,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    // 未读：70%透明度，已读：50%透明度（更淡）
+                    color = if (!email.isRead) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
             
-            // 星标图标
-            if (email.isStarred) {
+                // 右侧间距
                 Spacer(modifier = Modifier.width(8.dp))
+            }
+            
+            // 星标按钮 - 常驻右下角，可点击
+            IconButton(
+                onClick = {
+                    Log.d("EmailListItem", "点击星标: ${email.id}")
+                    onStar()
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 4.dp, bottom = 4.dp)
+                    .size(32.dp)
+            ) {
                 Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = "已加星标",
-                    tint = MaterialTheme.colorScheme.primary,
+                    imageVector = if (email.isStarred) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    contentDescription = if (email.isStarred) "取消星标" else "添加星标",
+                    tint = if (email.isStarred) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    },
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -249,4 +311,47 @@ private fun formatTimestamp(timestamp: Instant): String {
             format.format(Date(timestampMillis))
         }
     }
+}
+
+/**
+ * 未读指示器组件
+ * 显示4dp宽的蓝色指示条，带有左侧圆角和淡入淡出动画
+ */
+@Composable
+private fun UnreadIndicator(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .width(4.dp)
+            .fillMaxHeight()
+            .background(
+                color = MaterialTheme.colorScheme.primary,
+                shape = RoundedCornerShape(
+                    topStart = 2.dp,
+                    bottomStart = 2.dp,
+                    topEnd = 0.dp,
+                    bottomEnd = 0.dp
+                )
+            )
+    )
+}
+
+/**
+ * 时间戳显示组件
+ * 
+ * @param timestamp 邮件时间戳
+ * @param modifier 修饰符
+ */
+@Composable
+private fun TimeStamp(
+    timestamp: Instant,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = formatTimestamp(timestamp),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+    )
 }
