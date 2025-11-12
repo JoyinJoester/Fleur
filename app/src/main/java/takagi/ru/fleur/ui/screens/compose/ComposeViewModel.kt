@@ -1,6 +1,8 @@
 package takagi.ru.fleur.ui.screens.compose
 
 import android.net.Uri
+import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,11 +17,14 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import takagi.ru.fleur.domain.model.Account
 import takagi.ru.fleur.domain.model.Attachment
+import takagi.ru.fleur.domain.model.ComposeMode
 import takagi.ru.fleur.domain.model.Email
 import takagi.ru.fleur.domain.model.EmailAddress
 import takagi.ru.fleur.domain.model.FleurError
 import takagi.ru.fleur.domain.repository.AccountRepository
+import takagi.ru.fleur.domain.repository.EmailRepository
 import takagi.ru.fleur.domain.usecase.SendEmailUseCase
+import takagi.ru.fleur.util.EmailContentFormatter
 import java.util.UUID
 import javax.inject.Inject
 
@@ -30,7 +35,9 @@ import javax.inject.Inject
 @HiltViewModel
 class ComposeViewModel @Inject constructor(
     private val sendEmailUseCase: SendEmailUseCase,
-    private val accountRepository: AccountRepository
+    private val accountRepository: AccountRepository,
+    private val emailRepository: EmailRepository,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ComposeUiState())
@@ -40,6 +47,7 @@ class ComposeViewModel @Inject constructor(
     private var lastInputTime = 0L
     
     companion object {
+        private const val TAG = "ComposeViewModel"
         private const val AUTO_SAVE_INTERVAL = 30_000L // 30秒
         private const val INPUT_DEBOUNCE_DELAY = 3_000L // 3秒
     }
@@ -47,6 +55,29 @@ class ComposeViewModel @Inject constructor(
     init {
         loadDefaultAccount()
         startAutoSave()
+        
+        // 从路由参数获取撰写模式和引用邮件ID
+        val mode = savedStateHandle.get<String>("mode")
+        val referenceId = savedStateHandle.get<String>("referenceId")
+        
+        if (mode != null && referenceId != null) {
+            val composeMode = try {
+                ComposeMode.valueOf(mode)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "无效的撰写模式: $mode", e)
+                ComposeMode.NEW
+            }
+            
+            _uiState.update {
+                it.copy(
+                    composeMode = composeMode,
+                    referenceEmailId = referenceId
+                )
+            }
+            
+            // 加载引用邮件并预填充内容
+            loadReferenceEmail(referenceId, composeMode)
+        }
     }
     
     /**
@@ -339,6 +370,153 @@ class ComposeViewModel @Inject constructor(
      */
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+    
+    /**
+     * 加载引用邮件
+     * 
+     * 根据撰写模式加载原邮件并预填充内容
+     * 
+     * @param emailId 引用的邮件ID
+     * @param mode 撰写模式
+     */
+    private fun loadReferenceEmail(emailId: String, mode: ComposeMode) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            
+            try {
+                emailRepository.getEmailById(emailId).first().fold(
+                    onSuccess = { email ->
+                        prefillContent(email, mode)
+                    },
+                    onFailure = { error ->
+                        Log.w(TAG, "未找到引用邮件: $emailId", error)
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                error = FleurError.NotFoundError("未找到原邮件")
+                            )
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "加载引用邮件失败", e)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = FleurError.UnknownError("加载原邮件失败: ${e.message}", e)
+                    )
+                }
+            }
+        }
+    }
+    
+    /**
+     * 根据撰写模式预填充内容
+     * 
+     * @param originalEmail 原邮件
+     * @param mode 撰写模式
+     */
+    private fun prefillContent(originalEmail: Email, mode: ComposeMode) {
+        when (mode) {
+            ComposeMode.REPLY -> prefillReply(originalEmail)
+            ComposeMode.REPLY_ALL -> prefillReplyAll(originalEmail)
+            ComposeMode.FORWARD -> prefillForward(originalEmail)
+            ComposeMode.DRAFT -> prefillDraft(originalEmail)
+            ComposeMode.NEW -> {
+                // 新邮件模式不需要预填充
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    /**
+     * 预填充回复内容
+     * 
+     * @param originalEmail 原邮件
+     */
+    private fun prefillReply(originalEmail: Email) {
+        _uiState.update {
+            it.copy(
+                toAddresses = originalEmail.from.formatted(),
+                subject = EmailContentFormatter.addReplyPrefix(originalEmail.subject),
+                body = EmailContentFormatter.buildReplyBody(originalEmail),
+                isLoading = false,
+                isDirty = false // 预填充的内容不算修改
+            )
+        }
+    }
+    
+    /**
+     * 预填充全部回复内容
+     * 
+     * @param originalEmail 原邮件
+     */
+    private fun prefillReplyAll(originalEmail: Email) {
+        viewModelScope.launch {
+            // 获取当前用户的邮箱地址
+            val currentAccount = _uiState.value.selectedAccount
+            val currentUserEmail = currentAccount?.email
+            
+            // 构建收件人列表：原发件人 + 原收件人（排除当前用户）
+            val toList = mutableListOf<EmailAddress>()
+            toList.add(originalEmail.from)
+            toList.addAll(originalEmail.to.filter { it.address != currentUserEmail })
+            
+            // 构建抄送列表：原抄送人（排除当前用户）
+            val ccList = originalEmail.cc.filter { it.address != currentUserEmail }
+            
+            _uiState.update {
+                it.copy(
+                    toAddresses = toList.joinToString(", ") { addr -> addr.formatted() },
+                    ccAddresses = ccList.joinToString(", ") { addr -> addr.formatted() },
+                    subject = EmailContentFormatter.addReplyPrefix(originalEmail.subject),
+                    body = EmailContentFormatter.buildReplyBody(originalEmail),
+                    showCcBcc = ccList.isNotEmpty(), // 如果有抄送人，自动显示抄送字段
+                    isLoading = false,
+                    isDirty = false
+                )
+            }
+        }
+    }
+    
+    /**
+     * 预填充转发内容
+     * 
+     * @param originalEmail 原邮件
+     */
+    private fun prefillForward(originalEmail: Email) {
+        _uiState.update {
+            it.copy(
+                toAddresses = "", // 转发时收件人为空
+                subject = EmailContentFormatter.addForwardPrefix(originalEmail.subject),
+                body = EmailContentFormatter.buildForwardBody(originalEmail),
+                attachments = originalEmail.attachments, // 保留原邮件附件
+                isLoading = false,
+                isDirty = false
+            )
+        }
+    }
+    
+    /**
+     * 预填充草稿内容
+     * 
+     * @param draftEmail 草稿邮件
+     */
+    private fun prefillDraft(draftEmail: Email) {
+        _uiState.update {
+            it.copy(
+                toAddresses = draftEmail.to.joinToString(", ") { addr -> addr.formatted() },
+                ccAddresses = draftEmail.cc.joinToString(", ") { addr -> addr.formatted() },
+                bccAddresses = draftEmail.bcc.joinToString(", ") { addr -> addr.formatted() },
+                subject = draftEmail.subject,
+                body = draftEmail.bodyPlain,
+                attachments = draftEmail.attachments,
+                showCcBcc = draftEmail.cc.isNotEmpty() || draftEmail.bcc.isNotEmpty(),
+                isLoading = false,
+                isDirty = false
+            )
+        }
     }
     
     override fun onCleared() {

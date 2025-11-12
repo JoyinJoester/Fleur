@@ -194,4 +194,12 @@ interface EmailRepository {
      * @return Result<Unit> 恢复结果
      */
     suspend fun restoreEmails(emailIds: List<String>): Result<Unit>
+    
+    /**
+     * 移动邮件到指定文件夹
+     * @param emailId 邮件ID
+     * @param targetFolder 目标文件夹（inbox, sent, drafts, archive, trash, starred）
+     * @return Result<Unit> 移动结果
+     */
+    suspend fun moveToFolder(emailId: String, targetFolder: String): Result<Unit>
 }

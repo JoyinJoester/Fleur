@@ -33,7 +33,8 @@ class InboxViewModel @Inject constructor(
     private val networkMonitor: takagi.ru.fleur.util.NetworkMonitor,
     private val offlineOperationManager: takagi.ru.fleur.data.offline.OfflineOperationManager,
     private val preferencesRepository: takagi.ru.fleur.domain.repository.PreferencesRepository,
-    private val emailDao: takagi.ru.fleur.data.local.dao.EmailDao
+    private val emailDao: takagi.ru.fleur.data.local.dao.EmailDao,
+    private val syncQueueManager: takagi.ru.fleur.data.sync.SyncQueueManager
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(InboxUiState())
@@ -86,7 +87,12 @@ class InboxViewModel @Inject constructor(
     }
     
     /**
-     * 观察后台同步状态
+     * 观察后台同步状态（本地优先架构）
+     * 
+     * 本地优先策略：
+     * - 只更新同步状态标志，不自动刷新列表
+     * - 用户操作已经立即在本地生效，无需等待同步完成
+     * - 同步完成后不打断用户操作
      */
     private fun observeBackgroundSync() {
         viewModelScope.launch {
@@ -94,9 +100,11 @@ class InboxViewModel @Inject constructor(
                 .collect { isSyncing ->
                     _uiState.update { it.copy(isSyncing = isSyncing) }
                     
-                    // 如果后台同步完成，静默刷新邮件列表
-                    if (!isSyncing && _uiState.value.emails.isNotEmpty()) {
-                        loadEmails(reset = true)
+                    // 本地优先架构：移除自动刷新逻辑
+                    // 同步完成后不自动刷新列表，避免打断用户操作
+                    // 用户可以通过下拉刷新手动更新列表
+                    if (!isSyncing) {
+                        Log.d(TAG, "后台同步完成，保持当前列表状态")
                     }
                 }
         }
@@ -115,15 +123,18 @@ class InboxViewModel @Inject constructor(
     }
     
     /**
-     * 观察待处理操作数量
+     * 观察待同步操作数量（本地优先架构）
+     * 
+     * 使用 SyncQueueManager 的 Flow 实时观察待同步数量
+     * 在 UI 中显示待同步数量，让用户了解同步状态
      */
     private fun observePendingOperations() {
         viewModelScope.launch {
-            while (true) {
-                val count = offlineOperationManager.getPendingOperationCount()
-                _uiState.update { it.copy(pendingOperationCount = count) }
-                kotlinx.coroutines.delay(5000) // 每 5 秒更新一次
-            }
+            syncQueueManager.getPendingCountFlow()
+                .collect { count ->
+                    _uiState.update { it.copy(pendingSyncCount = count) }
+                    Log.d(TAG, "待同步操作数量: $count")
+                }
         }
     }
     
@@ -357,60 +368,60 @@ class InboxViewModel @Inject constructor(
     }
     
     /**
-     * 归档邮件
+     * 归档邮件（本地优先）
+     * 使用乐观UI更新策略：立即从列表中移除邮件
      */
     fun archiveEmail(emailId: String) {
         viewModelScope.launch {
+            // 立即从列表中移除已归档的邮件（同时更新 allEmails 和 emails）
+            _uiState.update { state ->
+                state.copy(
+                    allEmails = state.allEmails.filter { it.id != emailId },
+                    emails = state.emails.filter { it.id != emailId }
+                )
+            }
+            Log.d(TAG, "归档邮件：已从UI列表中移除: emailId=$emailId")
+            
+            // 异步执行归档操作
             val result = archiveEmailUseCase(emailId)
             result.fold(
                 onSuccess = {
-                    // 从列表中移除已归档的邮件（同时更新 allEmails 和 emails）
-                    _uiState.update { state ->
-                        state.copy(
-                            allEmails = state.allEmails.filter { it.id != emailId },
-                            emails = state.emails.filter { it.id != emailId }
-                        )
-                    }
-                    Log.d(TAG, "归档邮件成功，已从UI列表中移除: emailId=$emailId")
+                    Log.d(TAG, "归档邮件成功: emailId=$emailId")
                 },
                 onFailure = { error ->
                     Log.e(TAG, "归档邮件失败: emailId=$emailId, error=${error.message}")
-                    _uiState.update {
-                        it.copy(
-                            error = error as? FleurError
-                                ?: FleurError.UnknownError(error.message ?: "归档失败")
-                        )
-                    }
+                    // 本地优先架构：即使远程同步失败，本地操作已完成，不需要回滚UI
+                    // 错误会被记录到同步队列中，稍后重试
                 }
             )
         }
     }
     
     /**
-     * 删除邮件
+     * 删除邮件（本地优先）
+     * 使用乐观UI更新策略：立即从列表中移除邮件
      */
     fun deleteEmail(emailId: String) {
         viewModelScope.launch {
+            // 立即从列表中移除已删除的邮件（同时更新 allEmails 和 emails）
+            _uiState.update { state ->
+                state.copy(
+                    allEmails = state.allEmails.filter { it.id != emailId },
+                    emails = state.emails.filter { it.id != emailId }
+                )
+            }
+            Log.d(TAG, "删除邮件：已从UI列表中移除: emailId=$emailId")
+            
+            // 异步执行删除操作
             val result = deleteEmailUseCase(emailId)
             result.fold(
                 onSuccess = {
-                    // 从列表中移除已删除的邮件（同时更新 allEmails 和 emails）
-                    _uiState.update { state ->
-                        state.copy(
-                            allEmails = state.allEmails.filter { it.id != emailId },
-                            emails = state.emails.filter { it.id != emailId }
-                        )
-                    }
-                    Log.d(TAG, "删除邮件成功，已从UI列表中移除: emailId=$emailId")
+                    Log.d(TAG, "删除邮件成功: emailId=$emailId")
                 },
                 onFailure = { error ->
                     Log.e(TAG, "删除邮件失败: emailId=$emailId, error=${error.message}")
-                    _uiState.update {
-                        it.copy(
-                            error = error as? FleurError
-                                ?: FleurError.UnknownError(error.message ?: "删除失败")
-                        )
-                    }
+                    // 本地优先架构：即使远程同步失败，本地操作已完成，不需要回滚UI
+                    // 错误会被记录到同步队列中，稍后重试
                 }
             )
         }
@@ -467,74 +478,74 @@ class InboxViewModel @Inject constructor(
     }
     
     /**
-     * 标记为已读
+     * 标记为已读（本地优先）
+     * 使用乐观UI更新策略：立即更新UI状态
      */
     fun markAsRead(emailId: String) {
         viewModelScope.launch {
+            // 立即更新 UI 状态（同时更新 allEmails 和 emails，确保数据一致性）
+            _uiState.update { state ->
+                val updatedAllEmails = state.allEmails.map {
+                    if (it.id == emailId) it.copy(isRead = true) else it
+                }
+                val updatedEmails = state.emails.map {
+                    if (it.id == emailId) it.copy(isRead = true) else it
+                }
+                // 去重处理
+                val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markAsRead-allEmails")
+                val uniqueEmails = deduplicateEmails(updatedEmails, "markAsRead")
+                state.copy(
+                    allEmails = uniqueAllEmails,
+                    emails = uniqueEmails
+                )
+            }
+            
+            // 异步执行标记操作
             val result = markAsReadUseCase(emailId, true)
             result.fold(
                 onSuccess = {
-                    // 同时更新 allEmails 和 emails，确保数据一致性
-                    _uiState.update { state ->
-                        val updatedAllEmails = state.allEmails.map {
-                            if (it.id == emailId) it.copy(isRead = true) else it
-                        }
-                        val updatedEmails = state.emails.map {
-                            if (it.id == emailId) it.copy(isRead = true) else it
-                        }
-                        // 去重处理
-                        val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markAsRead-allEmails")
-                        val uniqueEmails = deduplicateEmails(updatedEmails, "markAsRead")
-                        state.copy(
-                            allEmails = uniqueAllEmails,
-                            emails = uniqueEmails
-                        )
-                    }
+                    Log.d(TAG, "标记已读成功: emailId=$emailId")
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            error = error as? FleurError
-                                ?: FleurError.UnknownError(error.message ?: "标记已读失败")
-                        )
-                    }
+                    Log.e(TAG, "标记已读失败: emailId=$emailId, error=${error.message}")
+                    // 本地优先架构：即使远程同步失败，本地操作已完成，不需要回滚UI
                 }
             )
         }
     }
     
     /**
-     * 标记为未读
+     * 标记为未读（本地优先）
+     * 使用乐观UI更新策略：立即更新UI状态
      */
     fun markAsUnread(emailId: String) {
         viewModelScope.launch {
+            // 立即更新 UI 状态（同时更新 allEmails 和 emails，确保数据一致性）
+            _uiState.update { state ->
+                val updatedAllEmails = state.allEmails.map {
+                    if (it.id == emailId) it.copy(isRead = false) else it
+                }
+                val updatedEmails = state.emails.map {
+                    if (it.id == emailId) it.copy(isRead = false) else it
+                }
+                // 去重处理
+                val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markAsUnread-allEmails")
+                val uniqueEmails = deduplicateEmails(updatedEmails, "markAsUnread")
+                state.copy(
+                    allEmails = uniqueAllEmails,
+                    emails = uniqueEmails
+                )
+            }
+            
+            // 异步执行标记操作
             val result = markAsReadUseCase(emailId, false)
             result.fold(
                 onSuccess = {
-                    // 同时更新 allEmails 和 emails，确保数据一致性
-                    _uiState.update { state ->
-                        val updatedAllEmails = state.allEmails.map {
-                            if (it.id == emailId) it.copy(isRead = false) else it
-                        }
-                        val updatedEmails = state.emails.map {
-                            if (it.id == emailId) it.copy(isRead = false) else it
-                        }
-                        // 去重处理
-                        val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markAsUnread-allEmails")
-                        val uniqueEmails = deduplicateEmails(updatedEmails, "markAsUnread")
-                        state.copy(
-                            allEmails = uniqueAllEmails,
-                            emails = uniqueEmails
-                        )
-                    }
+                    Log.d(TAG, "标记未读成功: emailId=$emailId")
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            error = error as? FleurError
-                                ?: FleurError.UnknownError(error.message ?: "标记未读失败")
-                        )
-                    }
+                    Log.e(TAG, "标记未读失败: emailId=$emailId, error=${error.message}")
+                    // 本地优先架构：即使远程同步失败，本地操作已完成，不需要回滚UI
                 }
             )
         }
@@ -588,109 +599,116 @@ class InboxViewModel @Inject constructor(
     }
     
     /**
-     * 批量删除选中的邮件
+     * 批量删除选中的邮件（本地优先）
+     * 使用乐观UI更新策略：立即从列表中移除邮件
      */
     fun deleteSelectedEmails() {
         viewModelScope.launch {
             val selectedIds = _uiState.value.selectedEmailIds.toList()
-            val result = deleteEmailUseCase.deleteMultiple(selectedIds)
             
+            // 立即更新 UI 状态（同时更新 allEmails 和 emails）
+            _uiState.update { state ->
+                state.copy(
+                    allEmails = state.allEmails.filter { it.id !in selectedIds },
+                    emails = state.emails.filter { it.id !in selectedIds },
+                    isMultiSelectMode = false,
+                    selectedEmailIds = emptySet()
+                )
+            }
+            Log.d(TAG, "批量删除：已从UI列表中移除 ${selectedIds.size} 封邮件")
+            
+            // 异步执行批量删除操作
+            val result = deleteEmailUseCase.deleteMultiple(selectedIds)
             result.fold(
                 onSuccess = {
-                    _uiState.update { state ->
-                        state.copy(
-                            emails = state.emails.filter { it.id !in selectedIds },
-                            isMultiSelectMode = false,
-                            selectedEmailIds = emptySet()
-                        )
-                    }
+                    Log.d(TAG, "批量删除成功: count=${selectedIds.size}")
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            error = error as? FleurError
-                                ?: FleurError.UnknownError(error.message ?: "批量删除失败")
-                        )
-                    }
+                    Log.e(TAG, "批量删除失败: ${error.message}")
+                    // 本地优先架构：即使远程同步失败，本地操作已完成，不需要回滚UI
                 }
             )
         }
     }
     
     /**
-     * 批量归档选中的邮件
+     * 批量归档选中的邮件（本地优先）
+     * 使用乐观UI更新策略：立即从列表中移除邮件
      */
     fun archiveSelectedEmails() {
         viewModelScope.launch {
             val selectedIds = _uiState.value.selectedEmailIds.toList()
-            val result = archiveEmailUseCase.archiveMultiple(selectedIds)
             
+            // 立即更新 UI 状态（同时更新 allEmails 和 emails）
+            _uiState.update { state ->
+                state.copy(
+                    allEmails = state.allEmails.filter { it.id !in selectedIds },
+                    emails = state.emails.filter { it.id !in selectedIds },
+                    isMultiSelectMode = false,
+                    selectedEmailIds = emptySet()
+                )
+            }
+            Log.d(TAG, "批量归档：已从UI列表中移除 ${selectedIds.size} 封邮件")
+            
+            // 异步执行批量归档操作
+            val result = archiveEmailUseCase.archiveMultiple(selectedIds)
             result.fold(
                 onSuccess = {
-                    _uiState.update { state ->
-                        state.copy(
-                            emails = state.emails.filter { it.id !in selectedIds },
-                            isMultiSelectMode = false,
-                            selectedEmailIds = emptySet()
-                        )
-                    }
+                    Log.d(TAG, "批量归档成功: count=${selectedIds.size}")
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            error = error as? FleurError
-                                ?: FleurError.UnknownError(error.message ?: "批量归档失败")
-                        )
-                    }
+                    Log.e(TAG, "批量归档失败: ${error.message}")
+                    // 本地优先架构：即使远程同步失败，本地操作已完成，不需要回滚UI
                 }
             )
         }
     }
     
     /**
-     * 批量标记为已读/未读
+     * 批量标记为已读/未读（本地优先）
+     * 使用乐观UI更新策略：立即更新UI状态
      */
     fun markSelectedAsRead(isRead: Boolean) {
         viewModelScope.launch {
             val selectedIds = _uiState.value.selectedEmailIds.toList()
-            val result = markAsReadUseCase.markMultiple(selectedIds, isRead)
             
+            // 立即更新 UI 状态（同时更新 allEmails 和 emails，确保数据一致性）
+            _uiState.update { state ->
+                val updatedAllEmails = state.allEmails.map { email ->
+                    if (email.id in selectedIds) {
+                        email.copy(isRead = isRead)
+                    } else {
+                        email
+                    }
+                }
+                val updatedEmails = state.emails.map { email ->
+                    if (email.id in selectedIds) {
+                        email.copy(isRead = isRead)
+                    } else {
+                        email
+                    }
+                }
+                // 去重处理
+                val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markSelectedAsRead-allEmails")
+                val uniqueEmails = deduplicateEmails(updatedEmails, "markSelectedAsRead")
+                state.copy(
+                    allEmails = uniqueAllEmails,
+                    emails = uniqueEmails,
+                    isMultiSelectMode = false,
+                    selectedEmailIds = emptySet()
+                )
+            }
+            Log.d(TAG, "批量标记为${if (isRead) "已读" else "未读"}：已更新 ${selectedIds.size} 封邮件")
+            
+            // 异步执行批量标记操作
+            val result = markAsReadUseCase.markMultiple(selectedIds, isRead)
             result.fold(
                 onSuccess = {
-                    _uiState.update { state ->
-                        // 同时更新 allEmails 和 emails，确保数据一致性
-                        val updatedAllEmails = state.allEmails.map { email ->
-                            if (email.id in selectedIds) {
-                                email.copy(isRead = isRead)
-                            } else {
-                                email
-                            }
-                        }
-                        val updatedEmails = state.emails.map { email ->
-                            if (email.id in selectedIds) {
-                                email.copy(isRead = isRead)
-                            } else {
-                                email
-                            }
-                        }
-                        // 去重处理
-                        val uniqueAllEmails = deduplicateEmails(updatedAllEmails, "markSelectedAsRead-allEmails")
-                        val uniqueEmails = deduplicateEmails(updatedEmails, "markSelectedAsRead")
-                        state.copy(
-                            allEmails = uniqueAllEmails,
-                            emails = uniqueEmails,
-                            isMultiSelectMode = false,
-                            selectedEmailIds = emptySet()
-                        )
-                    }
+                    Log.d(TAG, "批量标记成功: count=${selectedIds.size}, isRead=$isRead")
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            error = error as? FleurError
-                                ?: FleurError.UnknownError(error.message ?: "批量标记失败")
-                        )
-                    }
+                    Log.e(TAG, "批量标记失败: ${error.message}")
+                    // 本地优先架构：即使远程同步失败，本地操作已完成，不需要回滚UI
                 }
             )
         }

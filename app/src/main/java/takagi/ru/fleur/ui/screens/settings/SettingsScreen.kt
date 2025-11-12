@@ -88,6 +88,31 @@ fun SettingsScreen(
             
             Divider(modifier = Modifier.padding(vertical = 8.dp))
             
+            // WebDAV 同步设置（本地优先架构）
+            SettingsSectionHeader("WebDAV 同步")
+            
+            SwitchSetting(
+                title = "启用 WebDAV 同步",
+                subtitle = "将本地操作同步到 WebDAV 服务器",
+                checked = uiState.webdavEnabled,
+                onCheckedChange = { viewModel.setWebdavEnabled(it) }
+            )
+            
+            if (uiState.webdavEnabled) {
+                WebdavConfigSection(
+                    webdavUrl = uiState.webdavUrl,
+                    webdavUsername = uiState.webdavUsername,
+                    isSyncing = uiState.isSyncing,
+                    pendingSyncCount = uiState.pendingSyncCount,
+                    lastSyncTime = uiState.lastSyncTime,
+                    syncError = uiState.syncError,
+                    onManualSync = { viewModel.triggerManualSync() },
+                    onConfigureWebdav = { viewModel.showWebdavConfigDialog() }
+                )
+            }
+            
+            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            
             // 同步设置
             SettingsSectionHeader("同步")
             
@@ -363,6 +388,84 @@ private fun SwipeActionSetting(
                 onActionChange(SwipeAction.STAR)
                 expanded = false
             }
+        )
+    }
+}
+
+
+/**
+ * WebDAV 配置部分（本地优先架构）
+ * 显示 WebDAV 配置信息、同步状态和手动同步按钮
+ */
+@Composable
+private fun WebdavConfigSection(
+    webdavUrl: String,
+    webdavUsername: String,
+    isSyncing: Boolean,
+    pendingSyncCount: Int,
+    lastSyncTime: String?,
+    syncError: String?,
+    onManualSync: () -> Unit,
+    onConfigureWebdav: () -> Unit
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        // WebDAV 服务器信息
+        if (webdavUrl.isNotBlank()) {
+            ListItem(
+                headlineContent = { Text("服务器地址") },
+                supportingContent = { Text(webdavUrl) },
+                modifier = Modifier.clickable { onConfigureWebdav() }
+            )
+            
+            if (webdavUsername.isNotBlank()) {
+                ListItem(
+                    headlineContent = { Text("用户名") },
+                    supportingContent = { Text(webdavUsername) }
+                )
+            }
+        } else {
+            ListItem(
+                headlineContent = { Text("配置 WebDAV") },
+                supportingContent = { Text("点击配置 WebDAV 服务器") },
+                modifier = Modifier.clickable { onConfigureWebdav() }
+            )
+        }
+        
+        // 同步状态
+        ListItem(
+            headlineContent = { Text("同步状态") },
+            supportingContent = {
+                Column {
+                    Text(
+                        when {
+                            isSyncing -> "正在同步..."
+                            pendingSyncCount > 0 -> "待同步: $pendingSyncCount 项操作"
+                            else -> "已同步"
+                        }
+                    )
+                    lastSyncTime?.let {
+                        Text(
+                            text = "最后同步: $it",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    syncError?.let {
+                        Text(
+                            text = "错误: $it",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        )
+        
+        // 手动同步按钮
+        ListItem(
+            headlineContent = { Text("手动同步") },
+            supportingContent = { Text("立即同步到 WebDAV 服务器") },
+            modifier = Modifier.clickable(enabled = !isSyncing) { onManualSync() }
         )
     }
 }

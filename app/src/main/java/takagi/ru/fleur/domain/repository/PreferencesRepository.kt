@@ -76,4 +76,28 @@ interface PreferencesRepository {
      * 重置所有设置为默认值
      */
     suspend fun resetToDefaults()
+    
+    /**
+     * 设置 WebDAV 启用状态
+     * @param enabled 是否启用
+     */
+    suspend fun setWebDAVEnabled(enabled: Boolean)
+    
+    /**
+     * 设置 WebDAV 服务器 URL
+     * @param url 服务器 URL
+     */
+    suspend fun setWebDAVUrl(url: String)
+    
+    /**
+     * 设置 WebDAV 用户名
+     * @param username 用户名
+     */
+    suspend fun setWebDAVUsername(username: String)
+    
+    /**
+     * 检查 WebDAV 是否已配置且启用
+     * @return 是否已配置且启用
+     */
+    suspend fun isWebDAVConfigured(): Boolean
 }

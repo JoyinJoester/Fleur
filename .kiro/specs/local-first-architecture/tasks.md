@@ -14,7 +14,10 @@
   - 在 `FleurDatabase` 中注册 `SyncOperation` 实体
   - _需求: 1.3, 3.1, 3.2_
 
-- [ ] 2. 实现 SyncQueueManager 核心逻辑
+- [x] 2. 实现 SyncQueueManager 核心逻辑
+
+
+
   - 创建 `SyncQueueManager` 类，注入必要的依赖
   - 实现 `enqueue()` 方法，添加操作到队列
   - 实现 `processSyncQueue()` 方法，处理队列中的操作
@@ -22,14 +25,19 @@
   - 实现指数退避重试逻辑
   - _需求: 3.2, 3.3, 3.4, 5.2_
 
-- [ ] 3. 创建后台同步 Worker
+- [x] 3. 创建后台同步 Worker
+
+
+
   - 创建 `SyncWorker` 类，继承 `CoroutineWorker`
   - 实现 `doWork()` 方法，调用 `SyncQueueManager.processSyncQueue()`
   - 配置 WorkManager 约束条件（网络、电量等）
   - 设置定期同步任务（默认 15 分钟）
   - _需求: 3.2, 6.3_
 
-- [ ] 4. 添加 WebDAV 配置检查工具
+- [x] 4. 添加 WebDAV 配置检查工具
+
+
   - 在 `PreferencesRepository` 中添加 WebDAV 配置字段
   - 创建 `isWebDAVEnabled()` 辅助方法
   - 实现配置验证逻辑
@@ -37,36 +45,54 @@
 
 ## 阶段 2：EmailRepository 本地优先重构
 
-- [ ] 5. 重构 markEmailsAsRead 方法
+- [x] 5. 重构 markEmailsAsRead 方法
+
+
+
   - 修改方法逻辑：先更新本地数据库
   - 本地更新成功后立即返回成功结果
   - 如果 WebDAV 已启用，添加操作到同步队列
   - 移除对 WebDAV 错误的直接处理
   - _需求: 1.1, 1.2, 1.3, 2.3_
 
-- [ ] 6. 重构 archiveEmail 和 archiveMultiple 方法
+- [x] 6. 重构 archiveEmail 和 archiveMultiple 方法
+
+
+
   - 采用本地优先策略
   - 集成同步队列
   - 确保批量操作的原子性
   - _需求: 1.1, 1.2, 1.3_
 
-- [ ] 7. 重构 deleteEmail 和 deleteMultiple 方法
+- [x] 7. 重构 deleteEmail 和 deleteMultiple 方法
+
+
   - 采用本地优先策略
   - 集成同步队列
   - 处理级联删除（附件等）
   - _需求: 1.1, 1.2, 1.3_
 
-- [ ] 8. 重构 toggleStar 方法
+- [x] 8. 重构 toggleStar 方法
+
+
+
   - 采用本地优先策略
   - 集成同步队列
   - _需求: 1.1, 1.2, 1.3_
 
-- [ ] 9. 重构 moveToFolder 方法
+- [x] 9. 重构 moveToFolder 方法
+
+
+
+
+
   - 采用本地优先策略
   - 集成同步队列
   - _需求: 1.1, 1.2, 1.3_
 
-- [ ] 10. 更新 syncEmails 方法
+- [x] 10. 更新 syncEmails 方法
+
+
   - 改为从 WebDAV 拉取数据到本地
   - 实现冲突解决逻辑（最后写入获胜）
   - 使用时间戳比较本地和远程数据
@@ -74,25 +100,36 @@
 
 ## 阶段 3：ViewModel 层优化
 
-- [ ] 11. 优化 InboxViewModel 的状态管理
+- [x] 11. 优化 InboxViewModel 的状态管理
+
+
+
   - 确保 `allEmails` 和 `emails` 同步更新
   - 移除对 WebDAV 错误的特殊处理
   - 简化错误处理逻辑
   - _需求: 1.1, 6.1_
 
-- [ ] 12. 移除 observeBackgroundSync 的自动刷新
+- [x] 12. 移除 observeBackgroundSync 的自动刷新
+
+
   - 修改 `observeBackgroundSync()` 方法
   - 移除同步完成后的 `loadEmails(reset = true)` 调用
   - 改为静默更新已加载的邮件状态
   - _需求: 6.2, 6.5_
 
-- [ ] 13. 添加同步状态观察
+- [x] 13. 添加同步状态观察
+
+
+
   - 在 `InboxUiState` 中添加 `pendingSyncCount` 字段
   - 观察 `SyncQueueManager.getPendingCount()`
   - 在 UI 中显示待同步数量
   - _需求: 3.5_
 
-- [ ] 14. 优化其他 ViewModel
+- [x] 14. 优化其他 ViewModel
+
+
+
   - 更新 `EmailDetailViewModel`
   - 更新 `FolderViewModel`
   - 确保所有 ViewModel 使用本地优先策略
@@ -100,26 +137,34 @@
 
 ## 阶段 4：UI 层更新
 
-- [ ] 15. 添加同步状态指示器
+- [x] 15. 添加同步状态指示器
+
+
+
   - 在收件箱顶部显示待同步数量
   - 添加同步进度动画
   - 显示最后同步时间
   - _需求: 3.5, 2.5_
 
-- [ ] 16. 更新设置界面
+- [x] 16. 更新设置界面
+
+
   - 添加 WebDAV 启用/禁用开关
   - 添加 WebDAV 配置表单（URL、用户名、密码）
   - 添加手动同步按钮
   - 显示同步状态和错误信息
   - _需求: 2.1, 2.2, 2.4, 2.5_
 
-- [ ] 17. 添加同步错误通知
+- [x] 17. 添加同步错误通知
+
   - 当同步失败时显示通知
   - 提供重试选项
   - 显示错误详情
   - _需求: 5.1, 5.2_
 
-- [ ] 18. 优化离线体验
+
+- [x] 18. 优化离线体验
+
   - 在离线状态下隐藏同步相关 UI
   - 显示离线指示器
   - 确保所有操作在离线状态下正常工作

@@ -11,6 +11,9 @@ package takagi.ru.fleur.domain.model
  * @property notificationVibration 是否启用通知震动
  * @property swipeRightAction 右滑操作
  * @property swipeLeftAction 左滑操作
+ * @property webdavEnabled 是否启用 WebDAV 同步
+ * @property webdavUrl WebDAV 服务器 URL
+ * @property webdavUsername WebDAV 用户名
  */
 data class UserPreferences(
     val viewMode: ViewMode = ViewMode.LIST,
@@ -21,7 +24,11 @@ data class UserPreferences(
     val notificationSound: Boolean = true,
     val notificationVibration: Boolean = true,
     val swipeRightAction: SwipeAction = SwipeAction.ARCHIVE,
-    val swipeLeftAction: SwipeAction = SwipeAction.DELETE
+    val swipeLeftAction: SwipeAction = SwipeAction.DELETE,
+    // WebDAV 配置
+    val webdavEnabled: Boolean = false,
+    val webdavUrl: String = "",
+    val webdavUsername: String = ""
 )
 
 /**

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import takagi.ru.fleur.domain.repository.isWebDAVEnabled
 import takagi.ru.fleur.data.local.dao.AttachmentDao
 import takagi.ru.fleur.data.local.dao.EmailDao
 import takagi.ru.fleur.data.local.mapper.EntityMapper.toDomain
@@ -28,11 +29,17 @@ import kotlin.time.Duration.Companion.days
 /**
  * 邮件仓库实现
  * 协调本地数据库和远程 WebDAV 服务器
+ * 
+ * 采用本地优先架构：
+ * - 所有操作立即在本地生效
+ * - WebDAV 同步作为可选的后台任务
  */
 class EmailRepositoryImpl @Inject constructor(
     private val emailDao: EmailDao,
     private val attachmentDao: AttachmentDao,
-    private val webdavClient: WebDAVClient
+    private val webdavClient: WebDAVClient,
+    private val syncQueueManager: takagi.ru.fleur.data.sync.SyncQueueManager,
+    private val preferencesRepository: takagi.ru.fleur.domain.repository.PreferencesRepository
 ) : EmailRepository {
     
     companion object {
@@ -226,8 +233,13 @@ class EmailRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 删除邮件（移动到回收站）
+     * 删除邮件（本地优先）
      * 将邮件从当前文件夹移动到回收站
+     * 
+     * 本地优先策略：
+     * 1. 立即更新本地数据库（移除所有标签，只保留 trash）
+     * 2. 立即返回成功结果
+     * 3. 如果 WebDAV 已启用，添加操作到同步队列
      * 
      * @param emailId 邮件ID
      * @return 操作结果
@@ -243,21 +255,24 @@ class EmailRepositoryImpl @Inject constructor(
                     labels = "trash"  // 删除操作：移除所有标签，只保留 trash
                 )
                 
-                // 3. 更新本地数据库
+                // 3. 立即更新本地数据库
                 emailDao.updateEmail(updatedEntity)
+                Log.d(TAG, "本地删除邮件成功（移动到回收站）: emailId=$emailId, 标签更新: ${emailEntity.labels} -> trash")
                 
-                // 4. 尝试同步到远程服务器
-                try {
-                    // 注意: WebDAVClient 目前没有移动到回收站的方法
-                    // 这里暂时不调用远程删除,保持本地状态
-                    Log.d(TAG, "邮件已移动到回收站: emailId=$emailId")
-                } catch (e: IllegalArgumentException) {
-                    Log.w(TAG, "WebDAV 未连接，仅在本地移动到回收站: $emailId")
-                } catch (e: Exception) {
-                    Log.e(TAG, "远程同步删除失败: emailId=$emailId, error=${e.message}", e)
+                // 4. 如果 WebDAV 已启用，添加到同步队列
+                if (preferencesRepository.isWebDAVEnabled()) {
+                    val operation = takagi.ru.fleur.data.local.entity.SyncOperation(
+                        operationType = takagi.ru.fleur.data.local.entity.OperationType.DELETE,
+                        emailId = emailId,
+                        timestamp = Clock.System.now().toEpochMilliseconds()
+                    )
+                    syncQueueManager.enqueue(operation)
+                    Log.d(TAG, "已添加删除操作到同步队列: emailId=$emailId")
+                } else {
+                    Log.d(TAG, "WebDAV 未启用，跳过同步队列")
                 }
                 
-                Log.d(TAG, "删除邮件成功（移动到回收站）: emailId=$emailId, 标签更新: ${emailEntity.labels} -> trash")
+                // 5. 立即返回成功
                 Result.success(Unit)
             } else {
                 Log.e(TAG, "删除邮件失败: 邮件不存在, emailId=$emailId")
@@ -270,8 +285,13 @@ class EmailRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 归档邮件
+     * 归档邮件（本地优先）
      * 将邮件从收件箱移动到归档文件夹
+     * 
+     * 本地优先策略：
+     * 1. 立即更新本地数据库（移除 inbox 标签，添加 archive 标签，标记为已读）
+     * 2. 立即返回成功结果
+     * 3. 如果 WebDAV 已启用，添加操作到同步队列
      * 
      * @param emailId 邮件ID
      * @return 操作结果
@@ -297,24 +317,24 @@ class EmailRepositoryImpl @Inject constructor(
                     isRead = true  // 归档时标记为已读
                 )
                 
-                // 5. 调用 emailDao.updateEmail() 更新数据库
+                // 5. 立即更新本地数据库
                 emailDao.updateEmail(updatedEntity)
+                Log.d(TAG, "本地归档邮件成功: emailId=$emailId, 标签更新: ${emailEntity.labels} -> ${updatedEntity.labels}")
                 
-                // 6. 尝试调用 webdavClient 同步到远程服务器，捕获异常并记录日志
-                try {
-                    // 注意: WebDAVClient 目前没有 updateEmailLabels 方法
-                    // 使用 updateEmailFlags 来标记为已读
-                    val flags = EmailFlags(isRead = true)
-                    webdavClient.updateEmailFlags(emailId, flags)
-                } catch (e: IllegalArgumentException) {
-                    // WebDAV 未连接，仅在本地更新
-                    Log.w(TAG, "WebDAV 未连接，仅在本地归档邮件: $emailId")
-                } catch (e: Exception) {
-                    // 其他错误，记录但不影响本地操作
-                    Log.e(TAG, "远程同步归档失败: emailId=$emailId, error=${e.message}", e)
+                // 6. 如果 WebDAV 已启用，添加到同步队列
+                if (preferencesRepository.isWebDAVEnabled()) {
+                    val operation = takagi.ru.fleur.data.local.entity.SyncOperation(
+                        operationType = takagi.ru.fleur.data.local.entity.OperationType.ARCHIVE,
+                        emailId = emailId,
+                        timestamp = Clock.System.now().toEpochMilliseconds()
+                    )
+                    syncQueueManager.enqueue(operation)
+                    Log.d(TAG, "已添加归档操作到同步队列: emailId=$emailId")
+                } else {
+                    Log.d(TAG, "WebDAV 未启用，跳过同步队列")
                 }
                 
-                Log.d(TAG, "归档邮件成功: emailId=$emailId, 标签更新: ${emailEntity.labels} -> ${updatedEntity.labels}")
+                // 7. 立即返回成功
                 Result.success(Unit)
             } else {
                 Log.e(TAG, "归档邮件失败: 邮件不存在, emailId=$emailId")
@@ -350,35 +370,80 @@ class EmailRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 标记邮件为星标/取消星标
+     * 标记邮件为星标/取消星标（本地优先）
+     * 
+     * 本地优先策略：
+     * 1. 立即更新本地数据库
+     * 2. 立即返回成功结果
+     * 3. 如果 WebDAV 已启用，添加操作到同步队列
+     * 
+     * @param emailId 邮件ID
+     * @param isStarred 是否星标
+     * @return 操作结果
      */
     override suspend fun toggleStar(emailId: String, isStarred: Boolean): Result<Unit> {
         return try {
-            // 先更新本地数据库
+            // 1. 立即更新本地数据库
             emailDao.toggleStar(emailId, isStarred)
+            Log.d(TAG, "本地更新星标状态成功: emailId=$emailId, isStarred=$isStarred")
             
-            // 尝试更新远程服务器（如果连接的话）
-            try {
-                val flags = EmailFlags(isStarred = isStarred)
-                webdavClient.updateEmailFlags(emailId, flags)
-            } catch (e: IllegalArgumentException) {
-                // WebDAV 未连接，忽略错误，只在本地更新
-                android.util.Log.w("EmailRepository", "WebDAV 未连接，仅在本地更新星标状态")
+            // 2. 如果 WebDAV 已启用，添加到同步队列
+            if (preferencesRepository.isWebDAVEnabled()) {
+                val operationType = if (isStarred) {
+                    takagi.ru.fleur.data.local.entity.OperationType.STAR
+                } else {
+                    takagi.ru.fleur.data.local.entity.OperationType.UNSTAR
+                }
+                
+                val operation = takagi.ru.fleur.data.local.entity.SyncOperation(
+                    operationType = operationType,
+                    emailId = emailId,
+                    timestamp = Clock.System.now().toEpochMilliseconds()
+                )
+                syncQueueManager.enqueue(operation)
+                Log.d(TAG, "已添加星标操作到同步队列: emailId=$emailId")
+            } else {
+                Log.d(TAG, "WebDAV 未启用，跳过同步队列")
             }
             
+            // 3. 立即返回成功
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "更新星标状态失败: emailId=$emailId, error=${e.message}", e)
             Result.failure(FleurError.DatabaseError(e.message ?: "更新失败"))
         }
     }
     
     /**
-     * 同步邮件（增量同步）
+     * 同步邮件（本地优先增量同步）
+     * 
+     * 本地优先策略：
+     * 1. 从 WebDAV 拉取远程数据
+     * 2. 使用时间戳比较本地和远程数据
+     * 3. 实现冲突解决逻辑（最后写入获胜）
+     * 4. 更新本地数据库
+     * 
+     * @param accountId 账户ID
+     * @return 同步结果
      */
     override suspend fun syncEmails(accountId: String): Result<SyncResult> {
         return try {
+            // 检查 WebDAV 是否已启用
+            if (!preferencesRepository.isWebDAVEnabled()) {
+                Log.d(TAG, "WebDAV 未启用，跳过同步")
+                return Result.success(
+                    SyncResult(
+                        accountId = accountId,
+                        newEmailsCount = 0,
+                        updatedEmailsCount = 0,
+                        success = true
+                    )
+                )
+            }
+            
             // 获取最后同步时间
             val lastSyncTime = getLastSyncTime(accountId)
+            Log.d(TAG, "开始同步邮件: accountId=$accountId, lastSyncTime=$lastSyncTime")
             
             // 从 WebDAV 服务器获取新邮件
             val result = webdavClient.fetchEmails(lastSyncTime)
@@ -387,29 +452,76 @@ class EmailRepositoryImpl @Inject constructor(
                 val emailDtos = result.getOrNull() ?: emptyList()
                 var newCount = 0
                 var updatedCount = 0
+                var skippedCount = 0
                 
-                // 保存到本地数据库
+                Log.d(TAG, "从 WebDAV 获取到 ${emailDtos.size} 封邮件")
+                
+                // 处理每封邮件
                 for (dto in emailDtos) {
-                    val email = dto.toDomain(accountId)
-                    val existing = emailDao.getEmailById(email.id)
+                    val remoteEmail = dto.toDomain(accountId)
+                    val remoteTimestamp = remoteEmail.timestamp.toEpochMilliseconds()
                     
-                    if (existing == null) {
+                    // 获取本地邮件（如果存在）
+                    val localEntity = emailDao.getEmailById(remoteEmail.id).first()
+                    
+                    if (localEntity == null) {
+                        // 本地不存在，直接插入
+                        emailDao.insertEmail(remoteEmail.toEntity())
+                        
+                        // 保存附件
+                        remoteEmail.attachments.forEach { attachment ->
+                            attachmentDao.insertAttachment(attachment.toEntity())
+                        }
+                        
                         newCount++
+                        Log.d(TAG, "新增邮件: emailId=${remoteEmail.id}")
                     } else {
-                        updatedCount++
-                    }
-                    
-                    emailDao.insertEmail(email.toEntity())
-                    
-                    // 保存附件
-                    email.attachments.forEach { attachment ->
-                        attachmentDao.insertAttachment(attachment.toEntity())
+                        // 本地存在，比较时间戳
+                        val localTimestamp = localEntity.timestamp
+                        
+                        if (remoteTimestamp > localTimestamp) {
+                            // 远程数据更新，更新本地数据
+                            // 注意：保留本地的 isRead 和 isStarred 状态（用户可能已经修改）
+                            val updatedEntity = remoteEmail.toEntity().copy(
+                                isRead = localEntity.isRead,
+                                isStarred = localEntity.isStarred
+                            )
+                            emailDao.updateEmail(updatedEntity)
+                            
+                            // 更新附件
+                            remoteEmail.attachments.forEach { attachment ->
+                                attachmentDao.insertAttachment(attachment.toEntity())
+                            }
+                            
+                            updatedCount++
+                            Log.d(TAG, "更新邮件: emailId=${remoteEmail.id}, 远程时间戳=$remoteTimestamp > 本地时间戳=$localTimestamp")
+                        } else if (remoteTimestamp == localTimestamp) {
+                            // 时间戳相同，检查内容是否有差异
+                            // 如果本地的 isRead 或 isStarred 与远程不同，保留本地状态
+                            val remoteEntity = remoteEmail.toEntity()
+                            if (localEntity.isRead != remoteEntity.isRead || 
+                                localEntity.isStarred != remoteEntity.isStarred) {
+                                // 本地状态已修改，跳过更新
+                                skippedCount++
+                                Log.d(TAG, "跳过邮件（本地状态已修改）: emailId=${remoteEmail.id}")
+                            } else {
+                                // 内容相同，跳过
+                                skippedCount++
+                            }
+                        } else {
+                            // 本地数据更新，保留本地数据
+                            skippedCount++
+                            Log.d(TAG, "跳过邮件（本地更新）: emailId=${remoteEmail.id}, 本地时间戳=$localTimestamp > 远程时间戳=$remoteTimestamp")
+                        }
                     }
                 }
                 
                 // 清理旧邮件（30天前）
                 val cutoffTime = Clock.System.now().minus(CACHE_DURATION)
                 emailDao.deleteEmailsBefore(cutoffTime.toEpochMilliseconds())
+                Log.d(TAG, "清理旧邮件: 删除了 30 天前的邮件")
+                
+                Log.d(TAG, "同步完成: 新增=$newCount, 更新=$updatedCount, 跳过=$skippedCount")
                 
                 Result.success(
                     SyncResult(
@@ -420,20 +532,24 @@ class EmailRepositoryImpl @Inject constructor(
                     )
                 )
             } else {
-                Result.failure(
-                    FleurError.SyncError(
-                        result.exceptionOrNull()?.message ?: "同步失败"
-                    )
-                )
+                val error = result.exceptionOrNull()?.message ?: "同步失败"
+                Log.e(TAG, "同步失败: $error")
+                Result.failure(FleurError.SyncError(error))
             }
         } catch (e: Exception) {
+            Log.e(TAG, "同步邮件异常: ${e.message}", e)
             Result.failure(FleurError.NetworkError(e.message ?: "网络错误"))
         }
     }
     
     /**
-     * 批量删除邮件（移动到回收站）
+     * 批量删除邮件（本地优先）
      * 使用批量更新优化性能
+     * 
+     * 本地优先策略：
+     * 1. 立即批量更新本地数据库（移除所有标签，只保留 trash）
+     * 2. 立即返回成功结果
+     * 3. 如果 WebDAV 已启用，批量添加操作到同步队列
      * 
      * @param emailIds 邮件ID列表
      * @return 操作结果
@@ -460,13 +576,28 @@ class EmailRepositoryImpl @Inject constructor(
                 }
             }
             
-            // 使用批量更新标签
+            // 1. 立即批量更新本地数据库
             if (updates.isNotEmpty()) {
                 emailDao.updateEmailLabels(updates)
+                Log.d(TAG, "本地批量删除成功（移动到回收站）: count=${updates.size}")
                 
-                Log.d(TAG, "批量删除完成（移动到回收站）: 成功=${updates.size}, 失败=${failedIds.size}")
+                // 2. 如果 WebDAV 已启用，批量添加到同步队列
+                if (preferencesRepository.isWebDAVEnabled()) {
+                    val operations = updates.keys.map { emailId ->
+                        takagi.ru.fleur.data.local.entity.SyncOperation(
+                            operationType = takagi.ru.fleur.data.local.entity.OperationType.DELETE,
+                            emailId = emailId,
+                            timestamp = Clock.System.now().toEpochMilliseconds()
+                        )
+                    }
+                    syncQueueManager.enqueueAll(operations)
+                    Log.d(TAG, "已添加 ${operations.size} 个删除操作到同步队列")
+                } else {
+                    Log.d(TAG, "WebDAV 未启用，跳过同步队列")
+                }
             }
             
+            // 3. 立即返回成功
             if (failedIds.isEmpty()) {
                 Result.success(Unit)
             } else {
@@ -480,11 +611,16 @@ class EmailRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 批量归档邮件
+     * 批量归档邮件（本地优先）
      * 使用批量更新优化性能
      * 
+     * 本地优先策略：
+     * 1. 立即批量更新本地数据库（标签和已读状态）
+     * 2. 立即返回成功结果
+     * 3. 如果 WebDAV 已启用，批量添加操作到同步队列
+     * 
      * @param emailIds 邮件ID列表
-     * @return 操作结果，包含成功和失败的数量
+     * @return 操作结果
      */
     override suspend fun archiveEmails(emailIds: List<String>): Result<Unit> {
         return try {
@@ -514,34 +650,33 @@ class EmailRepositoryImpl @Inject constructor(
                 }
             }
             
-            // 使用 emailDao.updateEmailLabels(updates) 批量更新标签
+            // 1. 立即批量更新本地数据库
             if (updates.isNotEmpty()) {
+                // 批量更新标签
                 emailDao.updateEmailLabels(updates)
                 
-                // 使用 emailDao.markEmailsAsRead() 批量标记为已读
+                // 批量标记为已读
                 emailDao.markEmailsAsRead(updates.keys.toList(), true)
                 
-                // 尝试同步到远程服务器，记录失败的邮件ID
-                try {
-                    val flags = EmailFlags(isRead = true)
-                    updates.keys.forEach { emailId ->
-                        try {
-                            webdavClient.updateEmailFlags(emailId, flags)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "批量归档: 远程同步失败, emailId=$emailId, error=${e.message}")
-                            // 不将同步失败的邮件添加到 failedIds，因为本地操作已成功
-                        }
+                Log.d(TAG, "本地批量归档成功: count=${updates.size}")
+                
+                // 2. 如果 WebDAV 已启用，批量添加到同步队列
+                if (preferencesRepository.isWebDAVEnabled()) {
+                    val operations = updates.keys.map { emailId ->
+                        takagi.ru.fleur.data.local.entity.SyncOperation(
+                            operationType = takagi.ru.fleur.data.local.entity.OperationType.ARCHIVE,
+                            emailId = emailId,
+                            timestamp = Clock.System.now().toEpochMilliseconds()
+                        )
                     }
-                } catch (e: IllegalArgumentException) {
-                    Log.w(TAG, "WebDAV 未连接，仅在本地批量归档邮件")
+                    syncQueueManager.enqueueAll(operations)
+                    Log.d(TAG, "已添加 ${operations.size} 个归档操作到同步队列")
+                } else {
+                    Log.d(TAG, "WebDAV 未启用，跳过同步队列")
                 }
             }
             
-            // 记录成功和失败的数量
-            val successCount = updates.size
-            val failureCount = failedIds.size
-            Log.d(TAG, "批量归档完成: 成功=$successCount, 失败=$failureCount")
-            
+            // 3. 立即返回成功
             if (failedIds.isEmpty()) {
                 Result.success(Unit)
             } else {
@@ -555,21 +690,50 @@ class EmailRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 批量标记为已读
+     * 批量标记为已读/未读（本地优先）
+     * 
+     * 本地优先策略：
+     * 1. 立即更新本地数据库
+     * 2. 立即返回成功结果
+     * 3. 如果 WebDAV 已启用，添加操作到同步队列
+     * 
+     * @param emailIds 邮件ID列表
+     * @param isRead 是否已读
+     * @return 操作结果
      */
     override suspend fun markEmailsAsRead(emailIds: List<String>, isRead: Boolean): Result<Unit> {
         return try {
-            // 更新远程服务器
-            val flags = EmailFlags(isRead = isRead)
-            emailIds.forEach { emailId ->
-                webdavClient.updateEmailFlags(emailId, flags)
+            // 1. 立即更新本地数据库
+            emailDao.markEmailsAsRead(emailIds, isRead)
+            Log.d(TAG, "本地标记邮件为${if (isRead) "已读" else "未读"}成功: count=${emailIds.size}")
+            
+            // 2. 如果 WebDAV 已启用，添加到同步队列
+            if (preferencesRepository.isWebDAVEnabled()) {
+                val operationType = if (isRead) {
+                    takagi.ru.fleur.data.local.entity.OperationType.MARK_READ
+                } else {
+                    takagi.ru.fleur.data.local.entity.OperationType.MARK_UNREAD
+                }
+                
+                val operations = emailIds.map { emailId ->
+                    takagi.ru.fleur.data.local.entity.SyncOperation(
+                        operationType = operationType,
+                        emailId = emailId,
+                        timestamp = Clock.System.now().toEpochMilliseconds()
+                    )
+                }
+                
+                syncQueueManager.enqueueAll(operations)
+                Log.d(TAG, "已添加 ${operations.size} 个操作到同步队列")
+            } else {
+                Log.d(TAG, "WebDAV 未启用，跳过同步队列")
             }
             
-            // 更新本地数据库
-            emailDao.markEmailsAsRead(emailIds, isRead)
+            // 3. 立即返回成功
             Result.success(Unit)
         } catch (e: Exception) {
-            Result.failure(FleurError.NetworkError(e.message ?: "批量更新失败"))
+            Log.e(TAG, "标记邮件为${if (isRead) "已读" else "未读"}失败: ${e.message}", e)
+            Result.failure(FleurError.DatabaseError(e.message ?: "本地更新失败"))
         }
     }
     
@@ -773,6 +937,72 @@ class EmailRepositoryImpl @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(FleurError.DatabaseError(e.message ?: "批量恢复邮件失败"))
+        }
+    }
+    
+    /**
+     * 移动邮件到指定文件夹（本地优先）
+     * 
+     * 本地优先策略：
+     * 1. 立即更新本地数据库（更新邮件标签）
+     * 2. 立即返回成功结果
+     * 3. 如果 WebDAV 已启用，添加操作到同步队列
+     * 
+     * @param emailId 邮件ID
+     * @param targetFolder 目标文件夹（inbox, sent, drafts, archive, trash, starred）
+     * @return 操作结果
+     */
+    override suspend fun moveToFolder(emailId: String, targetFolder: String): Result<Unit> {
+        return try {
+            // 1. 获取邮件实体
+            val emailEntity = emailDao.getEmailById(emailId).first()
+            
+            if (emailEntity != null) {
+                // 2. 解析当前标签
+                val currentLabels = emailEntity.labels?.split(",")?.map { it.trim() }?.toMutableList() ?: mutableListOf()
+                
+                // 3. 移除所有文件夹标签（inbox, sent, drafts, archive, trash）
+                val folderLabels = listOf("inbox", "sent", "drafts", "archive", "trash")
+                currentLabels.removeAll(folderLabels)
+                
+                // 4. 添加目标文件夹标签
+                if (!currentLabels.contains(targetFolder)) {
+                    currentLabels.add(targetFolder)
+                }
+                
+                // 5. 创建更新后的邮件实体
+                val updatedEntity = emailEntity.copy(
+                    labels = currentLabels.joinToString(",")
+                )
+                
+                // 6. 立即更新本地数据库
+                emailDao.updateEmail(updatedEntity)
+                Log.d(TAG, "本地移动邮件成功: emailId=$emailId, 从 ${emailEntity.labels} 移动到 $targetFolder")
+                
+                // 7. 如果 WebDAV 已启用，添加到同步队列
+                if (preferencesRepository.isWebDAVEnabled()) {
+                    // 使用 extraData 存储目标文件夹信息
+                    val operation = takagi.ru.fleur.data.local.entity.SyncOperation(
+                        operationType = takagi.ru.fleur.data.local.entity.OperationType.MOVE_TO_FOLDER,
+                        emailId = emailId,
+                        timestamp = Clock.System.now().toEpochMilliseconds(),
+                        extraData = targetFolder  // 存储目标文件夹
+                    )
+                    syncQueueManager.enqueue(operation)
+                    Log.d(TAG, "已添加移动操作到同步队列: emailId=$emailId, targetFolder=$targetFolder")
+                } else {
+                    Log.d(TAG, "WebDAV 未启用，跳过同步队列")
+                }
+                
+                // 8. 立即返回成功
+                Result.success(Unit)
+            } else {
+                Log.e(TAG, "移动邮件失败: 邮件不存在, emailId=$emailId")
+                Result.failure(FleurError.NotFoundError("邮件不存在"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "移动邮件失败: emailId=$emailId, targetFolder=$targetFolder, error=${e.message}", e)
+            Result.failure(FleurError.DatabaseError(e.message ?: "移动失败"))
         }
     }
     

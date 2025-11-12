@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import takagi.ru.fleur.data.local.datastore.dataStore
 import takagi.ru.fleur.domain.model.SwipeAction
@@ -47,7 +48,11 @@ class PreferencesRepositoryImpl @Inject constructor(
                 ),
                 swipeLeftAction = SwipeAction.valueOf(
                     preferences[KEY_SWIPE_LEFT_ACTION] ?: SwipeAction.DELETE.name
-                )
+                ),
+                // WebDAV 配置
+                webdavEnabled = preferences[KEY_WEBDAV_ENABLED] ?: false,
+                webdavUrl = preferences[KEY_WEBDAV_URL] ?: "",
+                webdavUsername = preferences[KEY_WEBDAV_USERNAME] ?: ""
             )
         }
     }
@@ -112,6 +117,35 @@ class PreferencesRepositoryImpl @Inject constructor(
         }
     }
     
+    override suspend fun setWebDAVEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[KEY_WEBDAV_ENABLED] = enabled
+        }
+    }
+    
+    override suspend fun setWebDAVUrl(url: String) {
+        dataStore.edit { preferences ->
+            preferences[KEY_WEBDAV_URL] = url.trim()
+        }
+    }
+    
+    override suspend fun setWebDAVUsername(username: String) {
+        dataStore.edit { preferences ->
+            preferences[KEY_WEBDAV_USERNAME] = username.trim()
+        }
+    }
+    
+    override suspend fun isWebDAVConfigured(): Boolean {
+        val preferences = dataStore.data.map { prefs ->
+            val enabled = prefs[KEY_WEBDAV_ENABLED] ?: false
+            val url = prefs[KEY_WEBDAV_URL] ?: ""
+            val username = prefs[KEY_WEBDAV_USERNAME] ?: ""
+            
+            enabled && url.isNotBlank() && username.isNotBlank()
+        }
+        return preferences.first()
+    }
+    
     companion object {
         private val KEY_VIEW_MODE = stringPreferencesKey("view_mode")
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
@@ -122,5 +156,10 @@ class PreferencesRepositoryImpl @Inject constructor(
         private val KEY_NOTIFICATION_VIBRATION = booleanPreferencesKey("notification_vibration")
         private val KEY_SWIPE_RIGHT_ACTION = stringPreferencesKey("swipe_right_action")
         private val KEY_SWIPE_LEFT_ACTION = stringPreferencesKey("swipe_left_action")
+        
+        // WebDAV 配置键
+        private val KEY_WEBDAV_ENABLED = booleanPreferencesKey("webdav_enabled")
+        private val KEY_WEBDAV_URL = stringPreferencesKey("webdav_url")
+        private val KEY_WEBDAV_USERNAME = stringPreferencesKey("webdav_username")
     }
 }

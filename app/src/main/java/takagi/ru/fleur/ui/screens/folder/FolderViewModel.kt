@@ -186,80 +186,80 @@ class FolderViewModel @Inject constructor(
                 EmailAction.MARK_UNREAD -> markAsReadUseCase(emailId, false)
             }
             
+            // 本地优先策略：立即更新 UI，不等待操作完成
+            // 记录操作结果，用于撤销
+            val actionResult = ActionResult(
+                action = action,
+                emailIds = listOf(emailId),
+                timestamp = System.currentTimeMillis(),
+                canUndo = canUndoAction(action)
+            )
+            
+            _uiState.update { 
+                it.copy(
+                    lastAction = actionResult,
+                    showUndoSnackbar = actionResult.canUndo
+                )
+            }
+            
+            // 根据操作类型立即更新 UI
+            when (action) {
+                EmailAction.STAR, EmailAction.UNSTAR -> {
+                    // 标星/取消标星：更新邮件状态而不是移除
+                    val newStarredState = action == EmailAction.STAR
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            emails = currentState.emails.map { email ->
+                                if (email.id == emailId) {
+                                    email.copy(isStarred = newStarredState)
+                                } else {
+                                    email
+                                }
+                            }
+                        )
+                    }
+                }
+                EmailAction.MARK_READ, EmailAction.MARK_UNREAD -> {
+                    // 标记已读/未读：更新邮件状态而不是移除
+                    val newReadState = action == EmailAction.MARK_READ
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            emails = currentState.emails.map { email ->
+                                if (email.id == emailId) {
+                                    email.copy(isRead = newReadState)
+                                } else {
+                                    email
+                                }
+                            }
+                        )
+                    }
+                }
+                else -> {
+                    // 其他操作（删除、归档、恢复等）：从列表中移除邮件
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            emails = currentState.emails.filter { it.id != emailId }
+                        )
+                    }
+                }
+            }
+            
+            // 如果显示撤销 Snackbar，设置自动隐藏
+            if (actionResult.canUndo) {
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(UNDO_TIMEOUT_MS)
+                    _uiState.update { it.copy(showUndoSnackbar = false) }
+                }
+            }
+            
+            // 异步执行实际操作
             result.fold(
                 onSuccess = {
-                    // 记录操作结果，用于撤销
-                    val actionResult = ActionResult(
-                        action = action,
-                        emailIds = listOf(emailId),
-                        timestamp = System.currentTimeMillis(),
-                        canUndo = canUndoAction(action)
-                    )
-                    
-                    _uiState.update { 
-                        it.copy(
-                            lastAction = actionResult,
-                            showUndoSnackbar = actionResult.canUndo
-                        )
-                    }
-                    
-                    // 根据操作类型更新 UI
-                    when (action) {
-                        EmailAction.STAR, EmailAction.UNSTAR -> {
-                            // 标星/取消标星：更新邮件状态而不是移除
-                            val newStarredState = action == EmailAction.STAR
-                            _uiState.update { currentState ->
-                                currentState.copy(
-                                    emails = currentState.emails.map { email ->
-                                        if (email.id == emailId) {
-                                            email.copy(isStarred = newStarredState)
-                                        } else {
-                                            email
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                        EmailAction.MARK_READ, EmailAction.MARK_UNREAD -> {
-                            // 标记已读/未读：更新邮件状态而不是移除
-                            val newReadState = action == EmailAction.MARK_READ
-                            _uiState.update { currentState ->
-                                currentState.copy(
-                                    emails = currentState.emails.map { email ->
-                                        if (email.id == emailId) {
-                                            email.copy(isRead = newReadState)
-                                        } else {
-                                            email
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                        else -> {
-                            // 其他操作（删除、归档、恢复等）：从列表中移除邮件
-                            _uiState.update { currentState ->
-                                currentState.copy(
-                                    emails = currentState.emails.filter { it.id != emailId }
-                                )
-                            }
-                        }
-                    }
-                    
-                    // 如果显示撤销 Snackbar，设置自动隐藏
-                    if (actionResult.canUndo) {
-                        viewModelScope.launch {
-                            kotlinx.coroutines.delay(UNDO_TIMEOUT_MS)
-                            _uiState.update { it.copy(showUndoSnackbar = false) }
-                        }
-                    }
+                    android.util.Log.d("FolderViewModel", "操作成功: action=$action, emailId=$emailId")
                 },
                 onFailure = { error ->
-                    _uiState.update { 
-                        it.copy(
-                            error = error as? FleurError 
-                                ?: FleurError.UnknownError(error.message ?: "操作失败")
-                        )
-                    }
+                    android.util.Log.e("FolderViewModel", "操作失败: action=$action, emailId=$emailId, error=${error.message}")
+                    // 本地优先架构：即使远程同步失败，本地操作已完成，不需要回滚UI
                 }
             )
         }

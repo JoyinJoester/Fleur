@@ -61,7 +61,7 @@ import kotlin.math.abs
 @Composable
 fun EmailDetailScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToReply: (String) -> Unit,
+    onNavigateToCompose: (String, takagi.ru.fleur.domain.model.ComposeMode) -> Unit,
     viewModel: EmailDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -69,6 +69,11 @@ fun EmailDetailScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    
+    // 设置导航回调
+    LaunchedEffect(Unit) {
+        viewModel.setNavigationCallback(onNavigateToCompose)
+    }
     
     // FAB可见性控制
     val isFabVisible by remember {

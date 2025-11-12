@@ -19,18 +19,63 @@ sealed class Screen(val route: String) {
     
     /**
      * 撰写邮件
-     * 可选参数: replyToId, forwardId
+     * 可选参数: mode (撰写模式), referenceId (引用邮件ID)
+     * 
+     * mode 可选值: NEW, REPLY, REPLY_ALL, FORWARD, DRAFT
      */
-    object Compose : Screen("compose?replyToId={replyToId}&forwardId={forwardId}") {
-        fun createRoute(replyToId: String? = null, forwardId: String? = null): String {
+    object Compose : Screen("compose?mode={mode}&referenceId={referenceId}") {
+        /**
+         * 创建撰写邮件路由
+         * 
+         * @param mode 撰写模式 (NEW, REPLY, REPLY_ALL, FORWARD, DRAFT)
+         * @param referenceId 引用的邮件ID（回复、转发或草稿时使用）
+         * @return 完整的路由字符串
+         */
+        fun createRoute(mode: String? = null, referenceId: String? = null): String {
             val params = mutableListOf<String>()
-            replyToId?.let { params.add("replyToId=$it") }
-            forwardId?.let { params.add("forwardId=$it") }
+            mode?.let { params.add("mode=$it") }
+            referenceId?.let { params.add("referenceId=$it") }
             return if (params.isEmpty()) "compose" else "compose?${params.joinToString("&")}"
         }
         
-        fun createRouteWithReply(replyToId: String) = createRoute(replyToId = replyToId)
-        fun createRouteWithForward(forwardId: String) = createRoute(forwardId = forwardId)
+        /**
+         * 创建回复路由
+         * 
+         * @param emailId 要回复的邮件ID
+         * @return 回复模式的路由字符串
+         */
+        fun createReplyRoute(emailId: String) = createRoute(mode = "REPLY", referenceId = emailId)
+        
+        /**
+         * 创建全部回复路由
+         * 
+         * @param emailId 要回复的邮件ID
+         * @return 全部回复模式的路由字符串
+         */
+        fun createReplyAllRoute(emailId: String) = createRoute(mode = "REPLY_ALL", referenceId = emailId)
+        
+        /**
+         * 创建转发路由
+         * 
+         * @param emailId 要转发的邮件ID
+         * @return 转发模式的路由字符串
+         */
+        fun createForwardRoute(emailId: String) = createRoute(mode = "FORWARD", referenceId = emailId)
+        
+        /**
+         * 创建草稿编辑路由
+         * 
+         * @param draftId 草稿邮件ID
+         * @return 草稿编辑模式的路由字符串
+         */
+        fun createDraftRoute(draftId: String) = createRoute(mode = "DRAFT", referenceId = draftId)
+        
+        // 保留旧方法以兼容现有代码
+        @Deprecated("使用 createReplyRoute 替代", ReplaceWith("createReplyRoute(replyToId)"))
+        fun createRouteWithReply(replyToId: String) = createReplyRoute(replyToId)
+        
+        @Deprecated("使用 createForwardRoute 替代", ReplaceWith("createForwardRoute(forwardId)"))
+        fun createRouteWithForward(forwardId: String) = createForwardRoute(forwardId)
     }
     
     /**

@@ -75,8 +75,21 @@ fun NavGraph(
             val emailId = backStackEntry.arguments?.getString("emailId") ?: ""
             EmailDetailScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToReply = { replyToId ->
-                    navController.navigate(Screen.Compose.createRouteWithReply(replyToId))
+                onNavigateToCompose = { referenceEmailId, mode ->
+                    // 根据撰写模式构建正确的路由
+                    val route = when (mode) {
+                        takagi.ru.fleur.domain.model.ComposeMode.REPLY -> 
+                            Screen.Compose.createReplyRoute(referenceEmailId)
+                        takagi.ru.fleur.domain.model.ComposeMode.REPLY_ALL -> 
+                            Screen.Compose.createReplyAllRoute(referenceEmailId)
+                        takagi.ru.fleur.domain.model.ComposeMode.FORWARD -> 
+                            Screen.Compose.createForwardRoute(referenceEmailId)
+                        takagi.ru.fleur.domain.model.ComposeMode.DRAFT -> 
+                            Screen.Compose.createDraftRoute(referenceEmailId)
+                        takagi.ru.fleur.domain.model.ComposeMode.NEW -> 
+                            Screen.Compose.createRoute()
+                    }
+                    navController.navigate(route)
                 }
             )
         }
@@ -85,18 +98,19 @@ fun NavGraph(
         composable(
             route = Screen.Compose.route,
             arguments = listOf(
-                navArgument("replyToId") {
+                navArgument("mode") {
                     type = NavType.StringType
                     nullable = true
+                    defaultValue = null
                 },
-                navArgument("forwardId") {
+                navArgument("referenceId") {
                     type = NavType.StringType
                     nullable = true
+                    defaultValue = null
                 }
             )
         ) { backStackEntry ->
-            val replyToId = backStackEntry.arguments?.getString("replyToId")
-            val forwardId = backStackEntry.arguments?.getString("forwardId")
+            // 参数会通过 SavedStateHandle 传递给 ViewModel
             ComposeScreen(
                 onNavigateBack = { navController.popBackStack() }
             )

@@ -22,7 +22,8 @@ data class InboxUiState(
     val lastSyncResult: List<SyncResult>? = null,
     val syncError: FleurError? = null,
     val isOffline: Boolean = false,
-    val pendingOperationCount: Int = 0,
+    val pendingOperationCount: Int = 0, // 已废弃，使用 pendingSyncCount 代替
+    val pendingSyncCount: Int = 0, // 待同步操作数量（本地优先架构）
     val swipeRightAction: takagi.ru.fleur.domain.model.SwipeAction = takagi.ru.fleur.domain.model.SwipeAction.ARCHIVE,
     val swipeLeftAction: takagi.ru.fleur.domain.model.SwipeAction = takagi.ru.fleur.domain.model.SwipeAction.DELETE,
     val searchQuery: String = "",

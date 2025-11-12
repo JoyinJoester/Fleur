@@ -17,7 +17,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    private val syncQueueManager: takagi.ru.fleur.data.sync.SyncQueueManager
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -127,10 +128,53 @@ class SettingsViewModel @Inject constructor(
             preferencesRepository.resetToDefaults()
         }
     }
+    
+    /**
+     * 设置 WebDAV 启用状态（本地优先架构）
+     */
+    fun setWebdavEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setWebDAVEnabled(enabled)
+            _uiState.value = _uiState.value.copy(webdavEnabled = enabled)
+        }
+    }
+    
+    /**
+     * 触发手动同步（本地优先架构）
+     */
+    fun triggerManualSync() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSyncing = true, syncError = null)
+            
+            try {
+                // 处理同步队列
+                val successCount = syncQueueManager.processSyncQueue()
+                
+                _uiState.value = _uiState.value.copy(
+                    isSyncing = false,
+                    lastSyncTime = "刚刚",
+                    syncError = null
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isSyncing = false,
+                    syncError = e.message ?: "同步失败"
+                )
+            }
+        }
+    }
+    
+    /**
+     * 显示 WebDAV 配置对话框
+     */
+    fun showWebdavConfigDialog() {
+        // TODO: 实现 WebDAV 配置对话框
+        // 这里可以导航到专门的 WebDAV 配置页面
+    }
 }
 
 /**
- * 设置页面 UI 状态
+ * 设置页面 UI 状态（本地优先架构）
  */
 data class SettingsUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -140,5 +184,13 @@ data class SettingsUiState(
     val notificationSound: Boolean = true,
     val notificationVibration: Boolean = true,
     val swipeRightAction: SwipeAction = SwipeAction.ARCHIVE,
-    val swipeLeftAction: SwipeAction = SwipeAction.DELETE
+    val swipeLeftAction: SwipeAction = SwipeAction.DELETE,
+    // WebDAV 同步配置（本地优先架构）
+    val webdavEnabled: Boolean = false,
+    val webdavUrl: String = "",
+    val webdavUsername: String = "",
+    val isSyncing: Boolean = false,
+    val pendingSyncCount: Int = 0,
+    val lastSyncTime: String? = null,
+    val syncError: String? = null
 )

@@ -151,17 +151,16 @@ fun InboxScreen(
                 .padding(paddingValues)
         ) {
             // 离线指示器
-            if (uiState.isOffline) {
-                takagi.ru.fleur.ui.components.OfflineIndicator(
-                    isOffline = uiState.isOffline,
-                    pendingOperationCount = uiState.pendingOperationCount,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-            }
+            takagi.ru.fleur.ui.components.OfflineIndicator(
+                isOffline = uiState.isOffline,
+                pendingOperationCount = uiState.pendingSyncCount
+            )
             
-            // 同步状态指示器
+            // 同步状态指示器（本地优先架构）
             takagi.ru.fleur.ui.components.SyncStatusIndicator(
-                isSyncing = uiState.isSyncing
+                isSyncing = uiState.isSyncing,
+                pendingSyncCount = uiState.pendingSyncCount,
+                lastSyncTime = null // TODO: 添加最后同步时间
             )
             
             Box(
