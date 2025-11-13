@@ -92,13 +92,16 @@ class AddContactViewModel @Inject constructor(
             isValid = false
         }
         
-        // 验证邮箱 - 使用简单的正则表达式,只要包含 @ 和 . 就认为合法
+        // 验证邮箱 - 使用宽松的正则表达式验证
         if (state.email.isBlank()) {
             _uiState.update { it.copy(emailError = "请输入邮箱地址") }
             isValid = false
-        } else if (!state.email.contains("@") || !state.email.substringAfter("@").contains(".")) {
-            _uiState.update { it.copy(emailError = "邮箱地址格式不正确") }
-            isValid = false
+        } else {
+            val emailPattern = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
+            if (!emailPattern.matches(state.email)) {
+                _uiState.update { it.copy(emailError = "邮箱地址格式不正确") }
+                isValid = false
+            }
         }
         
         return isValid
