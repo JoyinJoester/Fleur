@@ -43,7 +43,8 @@
 4. THE Search Bar SHALL 支持按邮箱地址搜索联系人
 5. THE Search Bar SHALL 使用 Material 3 的 SearchBar 组件样式
 6. THE Search Bar SHALL 显示搜索图标和清除按钮
-7. WHEN 搜索结果为空时,THE Contacts Page SHALL 显示友好的空状态提示
+7. THE Search Bar SHALL 显示简洁的占位符文本"搜索联系人",不包含功能提示
+8. WHEN 搜索结果为空时,THE Contacts Page SHALL 显示友好的空状态提示
 
 ### Requirement 3
 
@@ -106,9 +107,11 @@
 1. THE Contacts Page SHALL 按联系人姓名的首字母对联系人进行分组
 2. THE Contacts Page SHALL 在每个分组的顶部显示字母标题
 3. THE Contacts Page SHALL 在右侧显示字母索引滚动条
-4. WHEN 用户点击字母索引时,THE Contacts Page SHALL 快速滚动到对应的分组
-5. THE Contacts Page SHALL 使用粘性标题(sticky header)保持当前分组标题可见
-6. THE Contacts Page SHALL 为字母标题使用 Material 3 的 surface variant 背景色
+4. THE Alphabet Index SHALL 只显示实际存在的首字母,不显示没有联系人的字母
+5. THE Alphabet Index SHALL 为数字和特殊字符开头的联系人显示"#"符号
+6. WHEN 用户点击字母索引时,THE Contacts Page SHALL 快速滚动到对应的分组
+7. THE Contacts Page SHALL 使用粘性标题(sticky header)保持当前分组标题可见
+8. THE Contacts Page SHALL 为字母标题使用 Material 3 的 surface variant 背景色
 
 ### Requirement 8
 

@@ -363,6 +363,7 @@ fun ContactsSearchBar(
 - 圆角: 28dp (完全圆角)
 - 背景: surfaceVariant
 - elevation: 0dp (默认), 3dp (激活)
+- 占位符文本: "搜索联系人" (简洁,不包含功能提示)
 
 **布局**:
 ```kotlin
@@ -373,7 +374,7 @@ SearchBar(
     active = isActive,
     onActiveChange = onSearchActiveChange,
     modifier = modifier.fillMaxWidth(),
-    placeholder = { Text("搜索联系人") },
+    placeholder = { Text("搜索联系人") }, // 简洁的占位符,不显示"支持拼音/首字母"
     leadingIcon = {
         Icon(
             imageVector = Icons.Default.Search,
@@ -411,6 +412,7 @@ SearchBar(
 ```kotlin
 @Composable
 fun AlphabetIndex(
+    availableLetters: List<String>, // 只包含实际存在的首字母
     currentLetter: String,
     onLetterClick: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -424,6 +426,8 @@ fun AlphabetIndex(
 - 字母大小: 10sp
 - 当前字母: primary 色,加粗
 - 其他字母: onSurfaceVariant 色
+- 显示逻辑: 只显示实际存在的首字母,不显示全部A-Z
+- 特殊字符: 数字和特殊字符开头的联系人使用"#"符号
 
 **实现**:
 ```kotlin
@@ -434,10 +438,11 @@ Column(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(2.dp)
 ) {
-    ('A'..'Z').forEach { letter ->
-        val isSelected = letter.toString() == currentLetter
+    // 只显示实际存在的首字母
+    availableLetters.forEach { letter ->
+        val isSelected = letter == currentLetter
         Text(
-            text = letter.toString(),
+            text = letter,
             style = MaterialTheme.typography.labelSmall.copy(
                 fontSize = 10.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
@@ -447,9 +452,19 @@ Column(
             else 
                 MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
-                .clickable { onLetterClick(letter.toString()) }
+                .clickable { onLetterClick(letter) }
                 .padding(vertical = 2.dp)
         )
+    }
+}
+
+// 辅助函数: 获取联系人的首字母
+fun getContactInitial(name: String): String {
+    val firstChar = name.firstOrNull()?.uppercaseChar() ?: return "#"
+    return if (firstChar.isLetter()) {
+        firstChar.toString()
+    } else {
+        "#" // 数字和特殊字符统一使用 #
     }
 }
 ```
@@ -504,13 +519,28 @@ fun ContactsList(
 
 **实现**:
 ```kotlin
+// 辅助函数: 获取联系人的首字母
+fun getContactInitial(name: String): String {
+    val firstChar = name.firstOrNull()?.uppercaseChar() ?: return "#"
+    return if (firstChar.isLetter()) {
+        firstChar.toString()
+    } else {
+        "#" // 数字和特殊字符统一使用 #
+    }
+}
+
 val groupedContacts = remember(contacts) {
-    contacts.groupBy { 
-        it.name.firstOrNull()?.uppercaseChar()?.toString() ?: "#" 
-    }.toSortedMap()
+    contacts.groupBy { getContactInitial(it.name) }
+        .toSortedMap()
+}
+
+// 获取实际存在的首字母列表
+val availableLetters = remember(groupedContacts) {
+    groupedContacts.keys.toList()
 }
 
 val listState = rememberLazyListState()
+val scope = rememberCoroutineScope()
 
 Box(modifier = modifier.fillMaxSize()) {
     LazyColumn(
@@ -518,7 +548,7 @@ Box(modifier = modifier.fillMaxSize()) {
         contentPadding = PaddingValues(bottom = 88.dp) // FAB 空间
     ) {
         groupedContacts.forEach { (letter, contactsInGroup) ->
-            stickyHeader {
+            stickyHeader(key = letter) {
                 ContactGroupHeader(letter = letter)
             }
             
@@ -544,24 +574,36 @@ Box(modifier = modifier.fillMaxSize()) {
         }
     }
     
-    // 字母索引
+    // 字母索引 - 只显示实际存在的首字母
     val currentLetter by remember {
         derivedStateOf {
             val firstVisibleIndex = listState.firstVisibleItemIndex
             // 计算当前可见的字母
-            groupedContacts.keys.elementAtOrNull(firstVisibleIndex) ?: "A"
+            var itemCount = 0
+            for ((letter, contactsInGroup) in groupedContacts) {
+                itemCount += contactsInGroup.size + 1 // +1 for header
+                if (firstVisibleIndex < itemCount) {
+                    return@derivedStateOf letter
+                }
+            }
+            availableLetters.firstOrNull() ?: "A"
         }
     }
     
     AlphabetIndex(
+        availableLetters = availableLetters, // 只传递实际存在的首字母
         currentLetter = currentLetter,
         onLetterClick = { letter ->
             // 滚动到对应字母
-            val targetIndex = groupedContacts.keys.indexOf(letter)
-            if (targetIndex >= 0) {
-                scope.launch {
-                    listState.animateScrollToItem(targetIndex)
+            var targetIndex = 0
+            for ((key, contactsInGroup) in groupedContacts) {
+                if (key == letter) {
+                    scope.launch {
+                        listState.animateScrollToItem(targetIndex)
+                    }
+                    break
                 }
+                targetIndex += contactsInGroup.size + 1 // +1 for header
             }
         },
         modifier = Modifier.align(Alignment.CenterEnd)

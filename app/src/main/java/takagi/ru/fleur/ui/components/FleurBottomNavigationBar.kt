@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.sp
  * - 外层 Column: 扩展到系统导航栏区域，填充背景色
  * - 内层 Box: 导航内容区域，应用圆角
  * 
- * @param selectedItem 当前选中的项索引 (0-3)
+ * @param selectedItem 当前选中的项索引 (0-2)
  * @param onItemSelected 选中回调
  * @param modifier 修饰符
  */
@@ -61,12 +61,6 @@ fun FleurBottomNavigationBar(
                 selectedIcon = Icons.Filled.People,
                 unselectedIcon = Icons.Outlined.People,
                 index = 2
-            ),
-            BottomNavItem(
-                label = "Calendar",
-                selectedIcon = Icons.Filled.CalendarToday,
-                unselectedIcon = Icons.Outlined.CalendarToday,
-                index = 3
             )
         )
     }

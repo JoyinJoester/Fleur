@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import takagi.ru.fleur.ui.navigation.Screen
 import takagi.ru.fleur.ui.screens.contacts.components.ContactDetailBottomSheet
 import takagi.ru.fleur.ui.screens.contacts.components.ContactsLoadingState
+import takagi.ru.fleur.ui.screens.contacts.components.ContactsList
 
 /**
  * 联系人页面 - 简化版
@@ -80,7 +81,7 @@ fun ContactsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    placeholder = { Text("搜索联系人(支持拼音/首字母)") },
+                    placeholder = { Text("搜索联系人") },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = "搜索")
                     },

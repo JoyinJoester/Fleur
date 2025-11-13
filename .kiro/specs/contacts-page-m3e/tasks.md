@@ -198,3 +198,28 @@
   - 测试 FAB 的显示/隐藏逻辑
   - _Requirements: 3.1, 4.1, 5.1, 7.4_
 
+- [x] 19. 更新搜索栏占位符文本
+
+
+
+
+
+
+
+  - 修改 ContactsSearchBar 组件的 placeholder 文本
+  - 将"搜索联系人(支持拼音/首字母)"改为"搜索联系人"
+  - 确保占位符文本简洁明了
+  - _Requirements: 2.7_
+
+- [x] 20. 更新 AlphabetIndex 为动态显示
+
+- [x] 20. 更新 AlphabetIndex 为动态显示
+
+  - 修改 AlphabetIndex 组件接受 availableLetters 参数
+  - 实现 getContactInitial() 辅助函数,将数字和特殊字符映射为"#"
+  - 更新 ContactsList 组件,计算实际存在的首字母列表
+  - 只渲染实际存在的首字母,不显示全部A-Z
+  - 确保"#"符号正确显示在列表中(如果有数字或特殊字符开头的联系人)
+  - 更新滚动逻辑以适配动态字母列表
+  - _Requirements: 7.4, 7.5, 7.6_
+
