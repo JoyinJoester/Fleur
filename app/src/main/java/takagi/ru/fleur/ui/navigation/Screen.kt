@@ -142,6 +142,11 @@ sealed class Screen(val route: String) {
     object Contacts : Screen("contacts")
     
     /**
+     * 添加联系人
+     */
+    object AddContact : Screen("add_contact")
+    
+    /**
      * 图片查看器
      * 参数: messageId, imageIndex
      */

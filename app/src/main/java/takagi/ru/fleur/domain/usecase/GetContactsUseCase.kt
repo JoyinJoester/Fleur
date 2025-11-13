@@ -2,36 +2,36 @@ package takagi.ru.fleur.domain.usecase
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import takagi.ru.fleur.data.mapper.ContactMapper
-import takagi.ru.fleur.domain.repository.EmailRepository
+import takagi.ru.fleur.domain.repository.ContactRepository
 import takagi.ru.fleur.ui.model.ContactUiModel
 import javax.inject.Inject
 
 /**
- * 获取联系人列表用例
- * 从邮件中提取所有联系人，去重并按姓名排序
+ * 获取已保存联系人用例
+ * 从数据库中获取用户保存的联系人列表
  */
 class GetContactsUseCase @Inject constructor(
-    private val emailRepository: EmailRepository
+    private val contactRepository: ContactRepository
 ) {
     /**
      * 执行用例
-     * @param accountId 账户ID，null表示所有账户
-     * @return Flow<Result<List<ContactUiModel>>> 联系人列表流
+     * @return Flow<Result<List<ContactUiModel>>> 已保存联系人列表流
      */
-    operator fun invoke(
-        accountId: String? = null
-    ): Flow<Result<List<ContactUiModel>>> {
-        // 获取所有邮件（使用较大的页面大小以获取足够的联系人）
-        return emailRepository.getEmails(
-            accountId = accountId,
-            page = 0,
-            pageSize = 500
-        ).map { result ->
-            result.map { emails ->
-                // 从邮件中提取联系人
-                ContactMapper.extractContactsFromEmails(emails)
-            }
+    operator fun invoke(): Flow<Result<List<ContactUiModel>>> {
+        return contactRepository.getAllContacts().map { contacts ->
+            Result.success(
+                contacts.map { contact ->
+                    ContactUiModel(
+                        id = contact.id,
+                        name = contact.name,
+                        email = contact.email,
+                        phoneNumber = contact.phoneNumber,
+                        avatarUrl = contact.avatarUrl,
+                        isFavorite = contact.isFavorite
+                    )
+                }
+            )
         }
     }
 }
+

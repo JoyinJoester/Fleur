@@ -7,9 +7,11 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.datetime.Instant
 import takagi.ru.fleur.data.local.entity.AccountEntity
 import takagi.ru.fleur.data.local.entity.AttachmentEntity
+import takagi.ru.fleur.data.local.entity.ContactEntity
 import takagi.ru.fleur.data.local.entity.EmailEntity
 import takagi.ru.fleur.domain.model.Account
 import takagi.ru.fleur.domain.model.Attachment
+import takagi.ru.fleur.domain.model.Contact
 import takagi.ru.fleur.domain.model.Email
 import takagi.ru.fleur.domain.model.EmailAddress
 import takagi.ru.fleur.domain.model.WebDAVConfig
@@ -201,5 +203,47 @@ object EntityMapper {
     private fun serializeLabels(labels: List<String>): String? {
         if (labels.isEmpty()) return null
         return gson.toJson(labels)
+    }
+    
+    // ========== Contact 映射 ==========
+    
+    /**
+     * ContactEntity -> Contact
+     */
+    fun toContact(entity: ContactEntity): Contact {
+        return Contact(
+            id = entity.id,
+            name = entity.name,
+            email = entity.email,
+            phoneNumber = entity.phoneNumber,
+            organization = entity.organization,
+            jobTitle = entity.jobTitle,
+            address = entity.address,
+            notes = entity.notes,
+            avatarUrl = entity.avatarUrl,
+            isFavorite = entity.isFavorite,
+            createdAt = Instant.fromEpochMilliseconds(entity.createdAt),
+            updatedAt = Instant.fromEpochMilliseconds(entity.updatedAt)
+        )
+    }
+    
+    /**
+     * Contact -> ContactEntity
+     */
+    fun toContactEntity(contact: Contact): ContactEntity {
+        return ContactEntity(
+            id = contact.id,
+            name = contact.name,
+            email = contact.email,
+            phoneNumber = contact.phoneNumber,
+            organization = contact.organization,
+            jobTitle = contact.jobTitle,
+            address = contact.address,
+            notes = contact.notes,
+            avatarUrl = contact.avatarUrl,
+            isFavorite = contact.isFavorite,
+            createdAt = contact.createdAt.toEpochMilliseconds(),
+            updatedAt = contact.updatedAt.toEpochMilliseconds()
+        )
     }
 }

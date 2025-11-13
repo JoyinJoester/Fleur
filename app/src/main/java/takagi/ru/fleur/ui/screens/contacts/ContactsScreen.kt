@@ -65,9 +65,7 @@ fun ContactsScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    scope.launch {
-                        snackbarHostState.showSnackbar("添加联系人功能待开发")
-                    }
+                    navController.navigate(Screen.AddContact.route)
                 },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {

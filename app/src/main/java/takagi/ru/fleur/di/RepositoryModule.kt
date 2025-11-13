@@ -7,8 +7,10 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import takagi.ru.fleur.data.repository.ContactRepositoryImpl
 import takagi.ru.fleur.data.repository.EmailRepositoryImpl
 import takagi.ru.fleur.data.repository.PreferencesRepositoryImpl
+import takagi.ru.fleur.domain.repository.ContactRepository
 import takagi.ru.fleur.domain.repository.EmailRepository
 import takagi.ru.fleur.domain.repository.PreferencesRepository
 import javax.inject.Singleton
@@ -38,6 +40,12 @@ abstract class RepositoryModule {
     abstract fun bindSyncStatusRepository(
         impl: takagi.ru.fleur.data.repository.SyncStatusRepositoryImpl
     ): takagi.ru.fleur.domain.repository.SyncStatusRepository
+    
+    @Binds
+    @Singleton
+    abstract fun bindContactRepository(
+        impl: ContactRepositoryImpl
+    ): ContactRepository
     
     companion object {
         @Provides

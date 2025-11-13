@@ -220,6 +220,13 @@ fun NavGraph(
             )
         }
         
+        // 添加联系人
+        composable(Screen.AddContact.route) {
+            takagi.ru.fleur.ui.screens.contacts.AddContactScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        
         // 对话详情
         composable(
             route = Screen.ChatDetail.route,
