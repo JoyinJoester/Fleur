@@ -51,6 +51,9 @@ lifecycleViewmodel = "2.6.2"
 # Security
 security = "1.1.0-alpha06"
 
+# Pinyin
+pinyin4j = "2.5.1"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -116,6 +119,9 @@ lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-ru
 
 # Security
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "security" }
+
+# Pinyin
+pinyin4j = { group = "com.belerweb", name = "pinyin4j", version.ref = "pinyin4j" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

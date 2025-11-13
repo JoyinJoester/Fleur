@@ -146,6 +146,9 @@ dependencies {
     // Security
     implementation(libs.security.crypto)
     
+    // Pinyin
+    implementation(libs.pinyin4j)
+    
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -99,33 +99,6 @@ class ContactsViewModel @Inject constructor(
      */
     fun searchContacts(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
-        
-        if (query.isBlank()) {
-            return
-        }
-        
-        viewModelScope.launch {
-            searchContactsUseCase(query)
-                .catch { exception ->
-                    _uiState.update { 
-                        it.copy(
-                            error = exception.message ?: "搜索失败"
-                        )
-                    }
-                }
-                .collect { result ->
-                    result.fold(
-                        onSuccess = { /* 搜索结果已通过 filter 在 UI 层处理 */ },
-                        onFailure = { exception ->
-                            _uiState.update { 
-                                it.copy(
-                                    error = exception.message ?: "搜索失败"
-                                )
-                            }
-                        }
-                    )
-                }
-        }
     }
     
     /**

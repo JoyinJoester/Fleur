@@ -6,6 +6,7 @@ import takagi.ru.fleur.data.local.dao.ContactDao
 import takagi.ru.fleur.data.local.mapper.EntityMapper
 import takagi.ru.fleur.domain.model.Contact
 import takagi.ru.fleur.domain.repository.ContactRepository
+import takagi.ru.fleur.util.PinyinUtils
 import javax.inject.Inject
 
 /**
@@ -36,8 +37,20 @@ class ContactRepositoryImpl @Inject constructor(
     }
     
     override fun searchContacts(query: String): Flow<List<Contact>> {
-        return contactDao.searchContacts(query)
-            .map { entities -> entities.map { EntityMapper.toContact(it) } }
+        // 获取所有联系人,然后使用拼音工具进行过滤
+        return contactDao.getAllContacts()
+            .map { entities -> 
+                entities
+                    .map { EntityMapper.toContact(it) }
+                    .filter { contact ->
+                        // 支持姓名拼音/首字母、邮箱、组织搜索
+                        PinyinUtils.matches(contact.name, query) ||
+                        contact.email.contains(query, ignoreCase = true) ||
+                        contact.organization?.let { org -> 
+                            PinyinUtils.matches(org, query) 
+                        } ?: false
+                    }
+            }
     }
     
     override suspend fun addContact(contact: Contact): Result<Unit> {

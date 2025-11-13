@@ -56,6 +56,11 @@ fun ContactsScreen(
                         Icon(Icons.Default.Menu, contentDescription = "菜单")
                     }
                 },
+                actions = {
+                    IconButton(onClick = { viewModel.setSearchActive(true) }) {
+                        Icon(Icons.Default.Search, contentDescription = "搜索")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -73,15 +78,51 @@ fun ContactsScreen(
             }
         }
     ) { paddingValues ->
-        when {
-            uiState.isLoading -> {
-                Box(Modifier.fillMaxSize().padding(paddingValues)) {
-                    ContactsLoadingState()
-                }
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 搜索栏
+            if (uiState.isSearchActive) {
+                takagi.ru.fleur.ui.screens.contacts.components.ContactsSearchBar(
+                    query = uiState.searchQuery,
+                    onQueryChange = { viewModel.searchContacts(it) },
+                    active = uiState.isSearchActive,
+                    onActiveChange = { viewModel.setSearchActive(it) },
+                    searchResults = if (uiState.searchQuery.isNotBlank()) {
+                        uiState.contacts.filter { contact ->
+                            takagi.ru.fleur.util.PinyinUtils.matches(contact.name, uiState.searchQuery) ||
+                            contact.email.contains(uiState.searchQuery, ignoreCase = true)
+                        }
+                    } else {
+                        emptyList()
+                    },
+                    onContactClick = { contact ->
+                        viewModel.showContactDetail(contact)
+                        viewModel.setSearchActive(false)
+                    },
+                    onChatClick = { contact ->
+                        viewModel.navigateToChat(contact)?.let { conversationId ->
+                            navController.navigate(Screen.ChatDetail.createRoute(conversationId))
+                        }
+                        viewModel.setSearchActive(false)
+                    },
+                    onEmailClick = { contact ->
+                        val email = viewModel.navigateToCompose(contact)
+                        navController.navigate(Screen.Compose.createRoute() + "?to=$email")
+                        viewModel.setSearchActive(false)
+                    },
+                    modifier = Modifier.padding(paddingValues)
+                )
             }
             
-            else -> {
-                LazyColumn(
+            // 主内容
+            when {
+                uiState.isLoading -> {
+                    Box(Modifier.fillMaxSize().padding(paddingValues)) {
+                        ContactsLoadingState()
+                    }
+                }
+                
+                else -> {
+                    LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -143,6 +184,7 @@ fun ContactsScreen(
                 }
             }
         }
+    }
         
         // 联系人详情弹窗
         if (uiState.showDetailSheet && uiState.selectedContact != null) {

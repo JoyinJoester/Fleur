@@ -74,7 +74,7 @@ fun ContactsSearchBar(
         onActiveChange = onActiveChange,
         modifier = modifier.fillMaxWidth(),
         placeholder = {
-            Text("搜索联系人")
+            Text("搜索联系人(支持拼音/首字母)")
         },
         leadingIcon = {
             if (active) {
