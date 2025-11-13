@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import kotlinx.coroutines.launch
 import takagi.ru.fleur.ui.navigation.Screen
 import takagi.ru.fleur.ui.screens.contacts.components.ContactDetailBottomSheet
 import takagi.ru.fleur.ui.screens.contacts.components.ContactsLoadingState
@@ -36,6 +37,7 @@ fun ContactsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     
     // 显示错误消息
     LaunchedEffect(uiState.error) {
@@ -59,7 +61,19 @@ fun ContactsScreen(
                 )
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("添加联系人功能待开发")
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "添加联系人")
+            }
+        }
     ) { paddingValues ->
         when {
             uiState.isLoading -> {
@@ -92,7 +106,7 @@ fun ContactsScreen(
                     if (uiState.contacts.isNotEmpty()) {
                         item {
                             Text(
-                                text = "已保存联系人 (${uiState.contacts.size})",
+                                text = "往来过的联系人 (${uiState.contacts.size})",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
