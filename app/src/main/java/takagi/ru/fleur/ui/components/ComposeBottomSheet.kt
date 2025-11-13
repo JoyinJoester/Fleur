@@ -887,8 +887,11 @@ private fun PriorityPickerDialog(
  * 全屏正文编辑器
  */
 @OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 全屏正文编辑器
+ */
 @Composable
-private fun FullscreenBodyEditor(
+internal fun FullscreenBodyEditor(
     bodyText: String,
     onBodyTextChange: (String) -> Unit,
     onDismiss: () -> Unit

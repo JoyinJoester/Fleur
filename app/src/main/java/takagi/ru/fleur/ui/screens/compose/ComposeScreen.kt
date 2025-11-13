@@ -41,6 +41,7 @@ fun ComposeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    var showFullscreenEditor by remember { mutableStateOf(false) }
     
     // 文件选择器
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -186,16 +187,34 @@ fun ComposeScreen(
             
             Divider()
             
-            // 正文
-            OutlinedTextField(
-                value = uiState.body,
-                onValueChange = { viewModel.updateBody(it) },
-                placeholder = { Text("撰写邮件...") },
+            // 正文编辑区域（带全屏按钮）
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 200.dp),
-                singleLine = false
-            )
+                    .heightIn(min = 200.dp)
+            ) {
+                OutlinedTextField(
+                    value = uiState.body,
+                    onValueChange = { viewModel.updateBody(it) },
+                    placeholder = { Text("撰写邮件...") },
+                    modifier = Modifier.fillMaxSize(),
+                    singleLine = false
+                )
+                
+                // 全屏按钮（右下角）
+                IconButton(
+                    onClick = { showFullscreenEditor = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fullscreen,
+                        contentDescription = "全屏编辑",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
 
             if (uiState.quotedOriginalContent.isNotBlank()) {
                 Divider()
@@ -239,6 +258,15 @@ fun ComposeScreen(
                     )
                 }
             }
+        }
+        
+        // 全屏编辑器对话框
+        if (showFullscreenEditor) {
+            takagi.ru.fleur.ui.components.FullscreenBodyEditor(
+                bodyText = uiState.body,
+                onBodyTextChange = { viewModel.updateBody(it) },
+                onDismiss = { showFullscreenEditor = false }
+            )
         }
         
         // 账户选择器 Bottom Sheet
