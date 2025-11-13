@@ -424,49 +424,70 @@ private fun MessageList(
         val reversedMessages = messages.reversed()
         
         reversedMessages.forEachIndexed { index, message ->
-            // 判断是否需要显示日期分隔线
-            val showDateDivider = if (index == 0) {
-                // 第一条消息总是显示日期
-                true
-            } else {
-                // 如果与上一条消息不在同一天，显示日期
-                val previousMessage = reversedMessages[index - 1]
-                !isSameDay(message.timestamp, previousMessage.timestamp)
-            }
-            
-            // 日期分隔线
-            if (showDateDivider) {
-                item(key = "date_${message.timestamp}") {
-                    DateDivider(timestamp = message.timestamp)
-                }
-            }
-            
             // 消息气泡
             item(key = message.id) {
                 // 判断是否为发送的消息
                 // TODO: 从当前用户信息判断
                 val isSent = false // 暂时默认为接收的消息
                 
-                // 判断是否显示头像
-                // 如果下一条消息是同一个发送者，则不显示头像
-                val showAvatar = if (index < reversedMessages.size - 1) {
-                    val nextMessage = reversedMessages[index + 1]
-                    nextMessage.senderId != message.senderId
+                // 计算前后消息引用（用于分组逻辑）
+                val previousMessage = if (index > 0) reversedMessages[index - 1] else null
+                val nextMessage = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null
+                
+                // 计算分组状态
+                val isGroupedWithPrevious = previousMessage != null && 
+                    takagi.ru.fleur.ui.screens.chat.components.isSameGroup(message, previousMessage)
+                val isGroupedWithNext = nextMessage != null && 
+                    takagi.ru.fleur.ui.screens.chat.components.isSameGroup(message, nextMessage)
+                
+                // 计算显示配置
+                val displayConfig = takagi.ru.fleur.ui.screens.chat.components.calculateMessageDisplayConfig(
+                    currentMessage = message,
+                    previousMessage = previousMessage,
+                    nextMessage = nextMessage
+                )
+                
+                // 计算垂直间距（同组 2dp，不同组 4dp）
+                val topPadding = if (isGroupedWithPrevious) {
+                    2.dp
                 } else {
-                    true
+                    4.dp
                 }
                 
-                EnhancedMessageBubble(
-                    message = message,
-                    isSent = isSent,
-                    showAvatar = showAvatar,
-                    onClick = { onMessageClick(message) },
-                    onLongClick = { onMessageLongClick(message) },
-                    onImageClick = { imageIndex ->
-                        // 导航到图片查看器
-                        onNavigateToImageViewer(message.id, imageIndex)
-                    }
-                )
+                Box(modifier = Modifier.padding(top = topPadding)) {
+                    EnhancedMessageBubble(
+                        message = message,
+                        isSent = isSent,
+                        showAvatar = displayConfig.showAvatar,
+                        showSenderName = displayConfig.showSenderName,
+                        showTimestamp = displayConfig.showTimestamp,
+                        isGroupedWithPrevious = isGroupedWithPrevious,
+                        isGroupedWithNext = isGroupedWithNext,
+                        onClick = { onMessageClick(message) },
+                        onLongClick = { onMessageLongClick(message) },
+                        onImageClick = { imageIndex ->
+                            // 导航到图片查看器
+                            onNavigateToImageViewer(message.id, imageIndex)
+                        }
+                    )
+                }
+            }
+            
+            // 判断是否需要显示日期分隔线（在消息后面显示，因为 reverseLayout）
+            val showDateDivider = if (index == reversedMessages.size - 1) {
+                // 最后一条消息总是显示日期
+                true
+            } else {
+                // 如果与下一条消息不在同一天，显示日期
+                val nextMessage = reversedMessages[index + 1]
+                !isSameDay(message.timestamp, nextMessage.timestamp)
+            }
+            
+            // 日期分隔线（在消息之后显示，因为 reverseLayout 所以实际显示在上方）
+            if (showDateDivider) {
+                item(key = "date_${message.timestamp}") {
+                    DateDivider(timestamp = message.timestamp)
+                }
             }
         }
     }
