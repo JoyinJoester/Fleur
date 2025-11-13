@@ -122,4 +122,31 @@ sealed class Screen(val route: String) {
      * 垃圾箱
      */
     object Trash : Screen("trash")
+    
+    /**
+     * 对话列表（Chat）
+     */
+    object Chat : Screen("chat")
+    
+    /**
+     * 对话详情
+     * 参数: conversationId (threadId)
+     */
+    object ChatDetail : Screen("chat/{conversationId}") {
+        fun createRoute(conversationId: String) = "chat/$conversationId"
+    }
+    
+    /**
+     * 联系人
+     */
+    object Contacts : Screen("contacts")
+    
+    /**
+     * 图片查看器
+     * 参数: messageId, imageIndex
+     */
+    object ImageViewer : Screen("image_viewer/{messageId}/{imageIndex}") {
+        fun createRoute(messageId: String, imageIndex: Int) = 
+            "image_viewer/$messageId/$imageIndex"
+    }
 }

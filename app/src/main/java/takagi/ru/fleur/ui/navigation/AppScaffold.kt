@@ -22,9 +22,7 @@ import takagi.ru.fleur.domain.model.EmailAddress
 import takagi.ru.fleur.domain.usecase.SendEmailUseCase
 import takagi.ru.fleur.ui.components.FleurNavigationDrawer
 import takagi.ru.fleur.ui.components.FleurBottomNavigationBar
-import takagi.ru.fleur.ui.components.ComposeBottomSheet
 import android.util.Log
-import java.util.UUID
 
 /**
  * 应用脚手架
@@ -49,8 +47,6 @@ fun AppScaffold(
 ) {
     var drawerVisible by remember { mutableStateOf(false) }
     var selectedBottomItem by remember { mutableStateOf(0) }
-    var showComposeSheet by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     
     Box(modifier = modifier.fillMaxSize()) {
@@ -66,7 +62,9 @@ fun AppScaffold(
                             0 -> navController.navigate(Screen.Inbox.route) {
                                 popUpTo(Screen.Inbox.route) { inclusive = true }
                             }
-                            1 -> { /* TODO: Chat 页面 */ }
+                            1 -> navController.navigate(Screen.Chat.route) {
+                                popUpTo(Screen.Chat.route) { inclusive = true }
+                            }
                             2 -> { /* TODO: Contacts 页面 */ }
                             3 -> { /* TODO: Calendar 页面 */ }
                         }
@@ -78,7 +76,10 @@ fun AppScaffold(
             NavGraph(
                 navController = navController,
                 onMenuClick = { drawerVisible = true },
-                onComposeClick = { showComposeSheet = true },
+                onComposeClick = { 
+                    // Navigate to compose screen
+                    navController.navigate(Screen.Compose.createRoute())
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
@@ -127,92 +128,7 @@ fun AppScaffold(
             },
             onSwitchAccount = onSwitchAccount
         )
-        
-        // 撰写邮件 Bottom Sheet - 在最外层，覆盖底部导航栏
-        ComposeBottomSheet(
-            visible = showComposeSheet,
-            onDismiss = { showComposeSheet = false },
-            onSend = { to, subject, bodyPlain, bodyMarkdown, bodyHtml, contentType ->
-                scope.launch {
-                    try {
-                        // 检查当前账户
-                        if (currentAccount == null) {
-                            snackbarHostState.showSnackbar("请先登录账户")
-                            return@launch
-                        }
-                        
-                        // 解析收件人
-                        val toAddresses = parseEmailAddresses(to)
-                        if (toAddresses.isEmpty()) {
-                            snackbarHostState.showSnackbar("收件人格式错误")
-                            return@launch
-                        }
-                        
-                        // 创建邮件对象
-                        val email = Email(
-                            id = UUID.randomUUID().toString(),
-                            threadId = UUID.randomUUID().toString(),
-                            accountId = currentAccount.id,
-                            from = EmailAddress(
-                                name = currentAccount.displayName,
-                                address = currentAccount.email
-                            ),
-                            to = toAddresses,
-                            cc = emptyList(),
-                            bcc = emptyList(),
-                            subject = subject,
-                            bodyPreview = bodyPlain.take(200),
-                            bodyPlain = bodyPlain,
-                            bodyHtml = bodyHtml,
-                            bodyMarkdown = bodyMarkdown,
-                            contentType = contentType,
-                            attachments = emptyList(),
-                            timestamp = Clock.System.now(),
-                            isRead = true,
-                            isStarred = false,
-                            labels = emptyList()
-                        )
-                        
-                        Log.d("AppScaffold", "发送邮件: ${email.subject} to ${email.to.joinToString()}")
-                        
-                        // 发送邮件
-                        val result = sendEmailUseCase(email)
-                        
-                        result.fold(
-                            onSuccess = {
-                                Log.d("AppScaffold", "邮件发送成功")
-                                snackbarHostState.showSnackbar("邮件已发送")
-                                showComposeSheet = false
-                            },
-                            onFailure = { error ->
-                                Log.e("AppScaffold", "邮件发送失败: ${error.message}", error)
-                                snackbarHostState.showSnackbar("发送失败: ${error.message}")
-                            }
-                        )
-                    } catch (e: Exception) {
-                        Log.e("AppScaffold", "发送邮件异常", e)
-                        snackbarHostState.showSnackbar("发送失败: ${e.message}")
-                    }
-                }
-            }
-        )
     }
-}
-
-/**
- * 解析邮件地址字符串
- * 支持逗号、分号分隔
- */
-private fun parseEmailAddresses(addresses: String): List<EmailAddress> {
-    return addresses.split("[,;]".toRegex())
-        .map { it.trim() }
-        .filter { it.isNotBlank() && it.contains("@") }
-        .map { address ->
-            EmailAddress(
-                name = address.substringBefore("@"),
-                address = address
-            )
-        }
 }
 
 

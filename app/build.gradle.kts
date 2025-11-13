@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation("androidx.compose.material:material:1.5.4")
     implementation("androidx.compose.material:material-icons-extended:1.5.4")
     
     // Lifecycle
@@ -102,6 +103,10 @@ dependencies {
     
     // Image Loading
     implementation(libs.coil.compose)
+    implementation(libs.telephoto.zoomable)
+    
+    // Permissions
+    implementation(libs.accompanist.permissions)
     
     // Markdown 渲染
     implementation("io.noties.markwon:core:4.6.2") {

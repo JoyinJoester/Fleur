@@ -199,6 +199,68 @@ fun NavGraph(
                 }
             )
         }
+        
+        // 对话列表（Chat）
+        composable(Screen.Chat.route) {
+            takagi.ru.fleur.ui.screens.chat.ChatScreen(
+                onNavigateToDetail = { conversationId ->
+                    navController.navigate(Screen.ChatDetail.createRoute(conversationId))
+                },
+                onNavigateToSearch = {
+                    navController.navigate(Screen.Search.route)
+                }
+            )
+        }
+        
+        // 联系人
+        composable(Screen.Contacts.route) {
+            takagi.ru.fleur.ui.screens.contacts.ContactsScreen(
+                navController = navController,
+                onMenuClick = onMenuClick
+            )
+        }
+        
+        // 对话详情
+        composable(
+            route = Screen.ChatDetail.route,
+            arguments = listOf(
+                navArgument("conversationId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            takagi.ru.fleur.ui.screens.chat.ChatDetailScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToImageViewer = { messageId, imageIndex ->
+                    navController.navigate(
+                        Screen.ImageViewer.createRoute(messageId, imageIndex)
+                    )
+                },
+                onNavigateToCompose = { referenceEmailId, mode ->
+                    navController.navigate(
+                        Screen.Compose.createRoute(mode, referenceEmailId)
+                    )
+                }
+            )
+        }
+        
+        // 图片查看器
+        composable(
+            route = Screen.ImageViewer.route,
+            arguments = listOf(
+                navArgument("messageId") { type = NavType.StringType },
+                navArgument("imageIndex") { type = NavType.IntType }
+            ),
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None }
+        ) { backStackEntry ->
+            val messageId = backStackEntry.arguments?.getString("messageId") ?: ""
+            val imageIndex = backStackEntry.arguments?.getInt("imageIndex") ?: 0
+            
+            takagi.ru.fleur.ui.screens.chat.ImageViewerScreen(
+                messageId = messageId,
+                initialImageIndex = imageIndex,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
     }
 }
 
