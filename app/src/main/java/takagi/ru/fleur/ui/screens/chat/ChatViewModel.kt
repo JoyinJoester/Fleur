@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import takagi.ru.fleur.domain.repository.AccountRepository
 import takagi.ru.fleur.domain.usecase.GetConversationsUseCase
 import javax.inject.Inject
@@ -94,6 +95,9 @@ class ChatViewModel @Inject constructor(
                         }
                     )
                 }
+            } catch (e: CancellationException) {
+                // 协程被取消是正常行为,不需要记录错误
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "加载对话列表异常", e)
                 _uiState.update {
@@ -161,6 +165,9 @@ class ChatViewModel @Inject constructor(
                         }
                     )
                 }
+            } catch (e: CancellationException) {
+                // 协程被取消是正常行为,不需要记录错误
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "刷新对话列表异常", e)
                 _uiState.update {
@@ -235,6 +242,9 @@ class ChatViewModel @Inject constructor(
                         }
                     )
                 }
+            } catch (e: CancellationException) {
+                // 协程被取消是正常行为,不需要记录错误
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "加载更多对话异常", e)
                 _uiState.update {

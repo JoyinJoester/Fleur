@@ -65,7 +65,9 @@ fun AppScaffold(
                             1 -> navController.navigate(Screen.Chat.route) {
                                 popUpTo(Screen.Chat.route) { inclusive = true }
                             }
-                            2 -> { /* TODO: Contacts 页面 */ }
+                            2 -> navController.navigate(Screen.Contacts.route) {
+                                popUpTo(Screen.Contacts.route) { inclusive = true }
+                            }
                             3 -> { /* TODO: Calendar 页面 */ }
                         }
                     }
