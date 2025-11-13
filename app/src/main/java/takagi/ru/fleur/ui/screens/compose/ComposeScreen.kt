@@ -185,27 +185,33 @@ fun ComposeScreen(
             Divider()
             
             // 正文编辑区域（带全屏按钮）
-            OutlinedTextField(
-                value = uiState.body,
-                onValueChange = { viewModel.updateBody(it) },
-                placeholder = { Text("撰写邮件...") },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 200.dp),
-                singleLine = false,
-                trailingIcon = {
-                    IconButton(
-                        onClick = { showFullscreenEditor = true },
-                        modifier = Modifier.padding(bottom = 4.dp, end = 4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Fullscreen,
-                            contentDescription = "全屏编辑",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    .heightIn(min = 200.dp)
+            ) {
+                OutlinedTextField(
+                    value = uiState.body,
+                    onValueChange = { viewModel.updateBody(it) },
+                    placeholder = { Text("撰写邮件...") },
+                    modifier = Modifier.fillMaxSize(),
+                    singleLine = false
+                )
+                
+                // 全屏按钮（右下角）
+                IconButton(
+                    onClick = { showFullscreenEditor = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fullscreen,
+                        contentDescription = "全屏编辑",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
-            )
+            }
 
             if (uiState.quotedOriginalContent.isNotBlank()) {
                 Divider()
