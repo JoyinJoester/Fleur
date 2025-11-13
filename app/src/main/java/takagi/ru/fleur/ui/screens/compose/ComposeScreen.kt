@@ -182,9 +182,6 @@ fun ComposeScreen(
                 singleLine = true
             )
             
-            // 富文本编辑工具栏
-            RichTextToolbar()
-            
             Divider()
             
             // 正文编辑区域（带全屏按钮）
