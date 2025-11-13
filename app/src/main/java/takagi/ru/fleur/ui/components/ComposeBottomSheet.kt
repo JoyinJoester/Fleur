@@ -1179,30 +1179,180 @@ internal fun FullscreenBodyEditor(
             },
             containerColor = MaterialTheme.colorScheme.surface
         ) { paddingValues ->
-            OutlinedTextField(
-                value = textFieldValue,
-                onValueChange = { textFieldValue = it },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                placeholder = { 
-                    Text(
-                        "在此编写邮件正文...\n\n💡 提示：选中文本后点击工具栏按钮可以格式化选中内容",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    ) 
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                ),
-                textStyle = MaterialTheme.typography.bodyLarge,
-                minLines = 20
-            )
+            if (enableMarkdownRendering && textFieldValue.text.isNotBlank()) {
+                // Markdown渲染模式
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // 显示渲染提示
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Visibility,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Markdown 预览模式（关闭开关可继续编辑）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    
+                    // 渲染Markdown内容
+                    MarkdownText(
+                        markdown = textFieldValue.text,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            } else {
+                // 编辑模式
+                OutlinedTextField(
+                    value = textFieldValue,
+                    onValueChange = { textFieldValue = it },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    placeholder = { 
+                        Text(
+                            "在此编写邮件正文...\n\n💡 提示：选中文本后点击工具栏按钮可以格式化选中内容",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        ) 
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                    ),
+                    textStyle = MaterialTheme.typography.bodyLarge,
+                    minLines = 20
+                )
+            }
         }
     }
+}
+
+/**
+ * 简单的Markdown文本渲染组件
+ */
+@Composable
+private fun MarkdownText(
+    markdown: String,
+    modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge
+) {
+    // 简单的Markdown渲染逻辑
+    val lines = remember(markdown) { 
+        markdown.split("\n")
+    }
+    
+    Column(modifier = modifier) {
+        lines.forEach { line ->
+            when {
+                // 标题
+                line.startsWith("# ") -> {
+                    Text(
+                        text = line.substring(2),
+                        style = MaterialTheme.typography.headlineLarge,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                line.startsWith("## ") -> {
+                    Text(
+                        text = line.substring(3),
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.padding(vertical = 6.dp)
+                    )
+                }
+                line.startsWith("### ") -> {
+                    Text(
+                        text = line.substring(4),
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+                // 引用
+                line.startsWith("> ") -> {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = line.substring(2),
+                            style = style.copy(
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                            ),
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+                // 列表
+                line.startsWith("• ") || line.startsWith("- ") -> {
+                    Row(modifier = Modifier.padding(vertical = 2.dp)) {
+                        Text("• ", style = style)
+                        Text(
+                            text = line.substring(2),
+                            style = style
+                        )
+                    }
+                }
+                // 分割线
+                line.trim() == "---" || line.trim() == "***" -> {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                }
+                // 普通文本（处理粗体、斜体）
+                else -> {
+                    if (line.isNotBlank()) {
+                        Text(
+                            text = renderInlineMarkdown(line),
+                            style = style,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        )
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 渲染行内Markdown（粗体、斜体等）
+ */
+private fun renderInlineMarkdown(text: String): String {
+    var result = text
+    // 简单处理，实际应该使用AnnotatedString
+    result = result.replace(Regex("""\*\*(.*?)\*\*"""), "$1")  // 粗体
+    result = result.replace(Regex("""\*(.*?)\*"""), "$1")      // 斜体
+    result = result.replace(Regex("""__(.*?)__"""), "$1")      // 下划线
+    result = result.replace(Regex("""`(.*?)`"""), "$1")        // 代码
+    return result
 }
 
 /**
