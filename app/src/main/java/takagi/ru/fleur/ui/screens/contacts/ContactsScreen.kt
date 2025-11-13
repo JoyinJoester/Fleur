@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -49,22 +50,57 @@ fun ContactsScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("联系人") },
-                navigationIcon = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+            ) {
+                // 标题栏
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(onClick = onMenuClick) {
                         Icon(Icons.Default.Menu, contentDescription = "菜单")
                     }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.setSearchActive(true) }) {
+                    Text(
+                        text = "联系人",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                
+                // 搜索框
+                OutlinedTextField(
+                    value = uiState.searchQuery,
+                    onValueChange = { viewModel.searchContacts(it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    placeholder = { Text("搜索联系人(支持拼音/首字母)") },
+                    leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = "搜索")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    },
+                    trailingIcon = {
+                        if (uiState.searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.searchContacts("") }) {
+                                Icon(Icons.Default.Clear, contentDescription = "清除")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(28.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary
+                    )
                 )
-            )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
@@ -78,57 +114,32 @@ fun ContactsScreen(
             }
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            // 搜索栏
-            if (uiState.isSearchActive) {
-                takagi.ru.fleur.ui.screens.contacts.components.ContactsSearchBar(
-                    query = uiState.searchQuery,
-                    onQueryChange = { viewModel.searchContacts(it) },
-                    active = uiState.isSearchActive,
-                    onActiveChange = { viewModel.setSearchActive(it) },
-                    searchResults = if (uiState.searchQuery.isNotBlank()) {
-                        uiState.contacts.filter { contact ->
-                            takagi.ru.fleur.util.PinyinUtils.matches(contact.name, uiState.searchQuery) ||
-                            contact.email.contains(uiState.searchQuery, ignoreCase = true)
-                        }
-                    } else {
-                        emptyList()
-                    },
-                    onContactClick = { contact ->
-                        viewModel.showContactDetail(contact)
-                        viewModel.setSearchActive(false)
-                    },
-                    onChatClick = { contact ->
-                        viewModel.navigateToChat(contact)?.let { conversationId ->
-                            navController.navigate(Screen.ChatDetail.createRoute(conversationId))
-                        }
-                        viewModel.setSearchActive(false)
-                    },
-                    onEmailClick = { contact ->
-                        val email = viewModel.navigateToCompose(contact)
-                        navController.navigate(Screen.Compose.createRoute() + "?to=$email")
-                        viewModel.setSearchActive(false)
-                    },
-                    modifier = Modifier.padding(paddingValues)
-                )
+        // 主内容
+        when {
+            uiState.isLoading -> {
+                Box(Modifier.fillMaxSize().padding(paddingValues)) {
+                    ContactsLoadingState()
+                }
             }
             
-            // 主内容
-            when {
-                uiState.isLoading -> {
-                    Box(Modifier.fillMaxSize().padding(paddingValues)) {
-                        ContactsLoadingState()
+            else -> {
+                // 根据搜索条件过滤联系人
+                val displayContacts = if (uiState.searchQuery.isNotBlank()) {
+                    uiState.contacts.filter { contact ->
+                        takagi.ru.fleur.util.PinyinUtils.matches(contact.name, uiState.searchQuery) ||
+                        contact.email.contains(uiState.searchQuery, ignoreCase = true)
                     }
+                } else {
+                    uiState.contacts
                 }
                 
-                else -> {
-                    LazyColumn(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                 ) {
-                    // 往来邮箱区域
-                    if (uiState.frequentEmails.isNotEmpty()) {
+                    // 往来邮箱区域 (仅在非搜索模式显示)
+                    if (uiState.frequentEmails.isNotEmpty() && uiState.searchQuery.isBlank()) {
                         item {
                             FrequentEmailsSection(
                                 emails = uiState.frequentEmails,
@@ -142,10 +153,14 @@ fun ContactsScreen(
                     }
                     
                     // 联系人列表标题
-                    if (uiState.contacts.isNotEmpty()) {
+                    if (displayContacts.isNotEmpty()) {
                         item {
                             Text(
-                                text = "往来过的联系人 (${uiState.contacts.size})",
+                                text = if (uiState.searchQuery.isBlank()) {
+                                    "往来过的联系人 (${displayContacts.size})"
+                                } else {
+                                    "搜索结果 (${displayContacts.size})"
+                                },
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -155,7 +170,7 @@ fun ContactsScreen(
                     
                     // 联系人列表
                     items(
-                        items = uiState.contacts,
+                        items = displayContacts,
                         key = { it.id }
                     ) { contact ->
                         ContactItem(
@@ -165,26 +180,57 @@ fun ContactsScreen(
                     }
                     
                     // 空状态提示
-                    if (uiState.contacts.isEmpty() && uiState.frequentEmails.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 64.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "暂无联系人",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                    if (uiState.searchQuery.isBlank()) {
+                        // 非搜索模式的空状态
+                        if (displayContacts.isEmpty() && uiState.frequentEmails.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 64.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "暂无联系人",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // 搜索模式的空状态
+                        if (displayContacts.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 64.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SearchOff,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            text = "未找到匹配的联系人",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
         
         // 联系人详情弹窗
         if (uiState.showDetailSheet && uiState.selectedContact != null) {
