@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
@@ -900,6 +901,7 @@ internal fun FullscreenBodyEditor(
     var showInsertMenu by remember { mutableStateOf(false) }
     var showSnackbar by remember { mutableStateOf(false) }
     var snackbarMessage by remember { mutableStateOf("") }
+    var enableMarkdownRendering by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     
     // 使用 TextFieldValue 来支持文本选择
@@ -1129,6 +1131,25 @@ internal fun FullscreenBodyEditor(
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            // Markdown 渲染开关
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { 
+                                    enableMarkdownRendering = !enableMarkdownRendering
+                                }
+                            ) {
+                                Switch(
+                                    checked = enableMarkdownRendering,
+                                    onCheckedChange = { enableMarkdownRendering = it },
+                                    modifier = Modifier.scale(0.8f)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    "MD渲染",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                            
                             TextButton(onClick = { 
                                 showMessage("预览功能：将显示渲染后的邮件效果")
                             }) {
