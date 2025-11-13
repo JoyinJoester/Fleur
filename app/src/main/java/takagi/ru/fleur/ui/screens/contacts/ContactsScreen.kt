@@ -1,54 +1,33 @@
 package takagi.ru.fleur.ui.screens.contacts
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
-import takagi.ru.fleur.ui.screens.contacts.components.AddContactFAB
+import takagi.ru.fleur.ui.navigation.Screen
 import takagi.ru.fleur.ui.screens.contacts.components.ContactDetailBottomSheet
-import takagi.ru.fleur.ui.screens.contacts.components.ContactsEmptyState
-import takagi.ru.fleur.ui.screens.contacts.components.ContactsList
 import takagi.ru.fleur.ui.screens.contacts.components.ContactsLoadingState
-import takagi.ru.fleur.ui.screens.contacts.components.ContactsSearchBar
 
 /**
- * 联系人页面
- * 显示联系人列表，支持搜索、查看详情和快速操作
+ * 联系人页面 - 简化版
  * 
- * @param navController 导航控制器
- * @param onMenuClick 菜单按钮点击回调
- * @param viewModel ViewModel
+ * 顶部: 往来过的邮箱 (可折叠)
+ * 下方: 保存的联系人列表
  */
-@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsScreen(
     navController: NavController,
@@ -57,165 +36,325 @@ fun ContactsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val listState = rememberLazyListState()
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    
-    // 搜索防抖（300ms）
-    LaunchedEffect(Unit) {
-        snapshotFlow { uiState.searchQuery }
-            .debounce(300)
-            .collectLatest { query ->
-                if (query.isNotBlank()) {
-                    viewModel.searchContacts(query)
-                }
-            }
-    }
     
     // 显示错误消息
     LaunchedEffect(uiState.error) {
         uiState.error?.let { error ->
-            val result = snackbarHostState.showSnackbar(
-                message = error,
-                actionLabel = "重试",
-                duration = SnackbarDuration.Short
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                viewModel.loadContacts(refresh = true)
-            }
+            snackbarHostState.showSnackbar(error)
             viewModel.clearError()
         }
     }
     
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text("联系人") },
                 navigationIcon = {
                     IconButton(onClick = onMenuClick) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "菜单"
-                        )
+                        Icon(Icons.Default.Menu, contentDescription = "菜单")
                     }
                 },
-                scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
-        snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState)
-        },
-        floatingActionButton = {
-            if (!uiState.isSearchActive && uiState.contacts.isNotEmpty()) {
-                AddContactFAB(
-                    onClick = {
-                        // TODO: 导航到添加联系人页面
-                    },
-                    listState = listState
-                )
-            }
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            when {
-                // 加载状态
-                uiState.isLoading -> {
+        when {
+            uiState.isLoading -> {
+                Box(Modifier.fillMaxSize().padding(paddingValues)) {
                     ContactsLoadingState()
-                }
-                
-                // 空状态
-                uiState.contacts.isEmpty() && !uiState.isLoading -> {
-                    ContactsEmptyState(
-                        onAddContactClick = {
-                            // TODO: 导航到添加联系人页面
-                        }
-                    )
-                }
-                
-                // 正常状态
-                else -> {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        ContactsList(
-                            contacts = uiState.contacts,
-                            onContactClick = { contact ->
-                                viewModel.showContactDetail(contact)
-                            },
-                            onChatClick = { contact ->
-                                viewModel.navigateToChat(contact)?.let { conversationId ->
-                                    navController.navigate("chat_detail/$conversationId")
-                                }
-                            },
-                            onEmailClick = { contact ->
-                                val email = viewModel.navigateToCompose(contact)
-                                navController.navigate("compose?to=$email")
-                            }
-                        )
-                        
-                        // 搜索栏（覆盖在列表上方）
-                        ContactsSearchBar(
-                            query = uiState.searchQuery,
-                            onQueryChange = { query ->
-                                viewModel.searchContacts(query)
-                            },
-                            active = uiState.isSearchActive,
-                            onActiveChange = { active ->
-                                viewModel.setSearchActive(active)
-                            },
-                            searchResults = uiState.searchResults,
-                            onContactClick = { contact ->
-                                viewModel.showContactDetail(contact)
-                            },
-                            onChatClick = { contact ->
-                                viewModel.navigateToChat(contact)?.let { conversationId ->
-                                    navController.navigate("chat_detail/$conversationId")
-                                }
-                            },
-                            onEmailClick = { contact ->
-                                val email = viewModel.navigateToCompose(contact)
-                                navController.navigate("compose?to=$email")
-                            },
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
                 }
             }
             
-            // 联系人详情底部面板
-            if (uiState.showDetailSheet && uiState.selectedContact != null) {
-                ContactDetailBottomSheet(
-                    contact = uiState.selectedContact!!,
-                    onDismiss = { viewModel.hideContactDetail() },
-                    onChatClick = {
-                        viewModel.navigateToChat(uiState.selectedContact!!)?.let { conversationId ->
-                            navController.navigate("chat_detail/$conversationId")
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    // 往来邮箱区域
+                    if (uiState.frequentEmails.isNotEmpty()) {
+                        item {
+                            FrequentEmailsSection(
+                                emails = uiState.frequentEmails,
+                                isExpanded = uiState.showFrequentSection,
+                                onToggle = { viewModel.toggleFrequentSection() },
+                                onEmailClick = { email ->
+                                    navController.navigate(Screen.Compose.createRoute() + "?to=$email")
+                                }
+                            )
                         }
-                        viewModel.hideContactDetail()
-                    },
-                    onEmailClick = {
-                        val email = viewModel.navigateToCompose(uiState.selectedContact!!)
-                        navController.navigate("compose?to=$email")
-                        viewModel.hideContactDetail()
-                    },
-                    onEditClick = {
-                        // TODO: 导航到编辑联系人页面
-                        viewModel.hideContactDetail()
-                    },
-                    onDeleteClick = {
-                        // TODO: 实现删除联系人功能
-                        viewModel.hideContactDetail()
                     }
+                    
+                    // 联系人列表标题
+                    if (uiState.contacts.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "已保存联系人 (${uiState.contacts.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                            )
+                        }
+                    }
+                    
+                    // 联系人列表
+                    items(
+                        items = uiState.contacts,
+                        key = { it.id }
+                    ) { contact ->
+                        ContactItem(
+                            contact = contact,
+                            onClick = { viewModel.showContactDetail(contact) }
+                        )
+                    }
+                    
+                    // 空状态提示
+                    if (uiState.contacts.isEmpty() && uiState.frequentEmails.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 64.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "暂无联系人",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 联系人详情弹窗
+        if (uiState.showDetailSheet && uiState.selectedContact != null) {
+            ContactDetailBottomSheet(
+                contact = uiState.selectedContact!!,
+                onDismiss = { viewModel.hideContactDetail() },
+                onChatClick = {
+                    viewModel.navigateToChat(uiState.selectedContact!!)?.let { conversationId ->
+                        navController.navigate(Screen.ChatDetail.createRoute(conversationId))
+                    }
+                    viewModel.hideContactDetail()
+                },
+                onEmailClick = {
+                    val email = viewModel.navigateToCompose(uiState.selectedContact!!)
+                    navController.navigate(Screen.Compose.createRoute() + "?to=$email")
+                    viewModel.hideContactDetail()
+                },
+                onEditClick = {
+                    viewModel.hideContactDetail()
+                },
+                onDeleteClick = {
+                    viewModel.hideContactDetail()
+                }
+            )
+        }
+    }
+}
+
+/**
+ * 往来邮箱区域
+ */
+@Composable
+private fun FrequentEmailsSection(
+    emails: List<String>,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    onEmailClick: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "往来过的邮箱",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "(${emails.size})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "收起" else "展开",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            
+            if (isExpanded) {
+                Spacer(Modifier.height(12.dp))
+                emails.take(10).forEach { email ->
+                    EmailChip(
+                        email = email,
+                        onClick = { onEmailClick(email) }
+                    )
+                }
             }
         }
     }
+}
+
+/**
+ * 邮箱芯片
+ */
+@Composable
+private fun EmailChip(
+    email: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = email.first().uppercaseChar().toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = email,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                imageVector = Icons.Default.Send,
+                contentDescription = "发送邮件",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+/**
+ * 联系人列表项
+ */
+@Composable
+private fun ContactItem(
+    contact: takagi.ru.fleur.ui.model.ContactUiModel,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 头像
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = contact.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            
+            Spacer(Modifier.width(16.dp))
+            
+            // 信息
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = contact.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = contact.email,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            
+            // 操作按钮
+            Row {
+                IconButton(
+                    onClick = { /* Chat */ },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Chat,
+                        contentDescription = "聊天",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowRight,
+                        contentDescription = "详情",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 80.dp),
+        color = MaterialTheme.colorScheme.outlineVariant
+    )
 }

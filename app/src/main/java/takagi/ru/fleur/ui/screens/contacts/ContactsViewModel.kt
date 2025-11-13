@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import takagi.ru.fleur.domain.usecase.GetContactsUseCase
 import takagi.ru.fleur.domain.usecase.SearchContactsUseCase
+import takagi.ru.fleur.domain.repository.EmailRepository
 import takagi.ru.fleur.ui.model.ContactUiModel
 import javax.inject.Inject
 
@@ -21,7 +22,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ContactsViewModel @Inject constructor(
     private val getContactsUseCase: GetContactsUseCase,
-    private val searchContactsUseCase: SearchContactsUseCase
+    private val searchContactsUseCase: SearchContactsUseCase,
+    private val emailRepository: EmailRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ContactsUiState())
@@ -29,54 +31,63 @@ class ContactsViewModel @Inject constructor(
     
     init {
         loadContacts()
+        loadFrequentEmails()
     }
     
     /**
      * 加载联系人列表
-     * @param refresh 是否强制刷新
      */
-    fun loadContacts(refresh: Boolean = false) {
+    fun loadContacts() {
         viewModelScope.launch {
-            // 设置加载状态
-            _uiState.update { 
-                it.copy(
-                    isLoading = !refresh,
-                    isRefreshing = refresh,
-                    error = null
-                )
-            }
+            _uiState.update { it.copy(isLoading = true, error = null) }
             
             getContactsUseCase()
                 .catch { exception ->
-                    _uiState.update { 
-                        it.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            error = exception.message ?: "加载联系人失败"
-                        )
-                    }
+                    _uiState.update { it.copy(isLoading = false, error = exception.message ?: "加载联系人失败") }
                 }
                 .collect { result ->
                     result.fold(
                         onSuccess = { contacts ->
-                            _uiState.update { 
-                                it.copy(
-                                    contacts = contacts,
-                                    isLoading = false,
-                                    isRefreshing = false,
-                                    error = null
-                                )
-                            }
+                            _uiState.update { it.copy(contacts = contacts, isLoading = false, error = null) }
                         },
                         onFailure = { exception ->
-                            _uiState.update { 
-                                it.copy(
-                                    isLoading = false,
-                                    isRefreshing = false,
-                                    error = exception.message ?: "加载联系人失败"
-                                )
-                            }
+                            _uiState.update { it.copy(isLoading = false, error = exception.message ?: "加载联系人失败") }
                         }
+                    )
+                }
+        }
+    }
+    
+    /**
+     * 加载往来过的邮箱地址
+     * 从所有邮件的发件人/收件人中提取,排除已保存的联系人
+     */
+    private fun loadFrequentEmails() {
+        viewModelScope.launch {
+            emailRepository.getEmails(
+                accountId = null,
+                page = 0,
+                pageSize = 100
+            )
+                .catch { /* 忽略错误 */ }
+                .collect { result ->
+                    result.fold(
+                        onSuccess = { emails ->
+                            val savedEmails = _uiState.value.contacts.map { it.email }.toSet()
+                            val frequentEmails = emails
+                                .flatMap { msg ->
+                                    val fromEmail = msg.from.address
+                                    val toEmails = msg.to.map { addr -> addr.address }
+                                    val ccEmails = msg.cc.map { addr -> addr.address }
+                                    listOf(fromEmail) + toEmails + ccEmails
+                                }
+                                .distinct()
+                                .filterNot { it in savedEmails }
+                                .take(20)
+                            
+                            _uiState.update { state -> state.copy(frequentEmails = frequentEmails) }
+                        },
+                        onFailure = { /* 忽略错误 */ }
                     )
                 }
         }
@@ -90,12 +101,6 @@ class ContactsViewModel @Inject constructor(
         _uiState.update { it.copy(searchQuery = query) }
         
         if (query.isBlank()) {
-            _uiState.update { 
-                it.copy(
-                    searchResults = emptyList(),
-                    error = null
-                )
-            }
             return
         }
         
@@ -110,14 +115,7 @@ class ContactsViewModel @Inject constructor(
                 }
                 .collect { result ->
                     result.fold(
-                        onSuccess = { results ->
-                            _uiState.update { 
-                                it.copy(
-                                    searchResults = results,
-                                    error = null
-                                )
-                            }
-                        },
+                        onSuccess = { /* 搜索结果已通过 filter 在 UI 层处理 */ },
                         onFailure = { exception ->
                             _uiState.update { 
                                 it.copy(
@@ -138,10 +136,16 @@ class ContactsViewModel @Inject constructor(
         _uiState.update { 
             it.copy(
                 isSearchActive = active,
-                searchQuery = if (!active) "" else it.searchQuery,
-                searchResults = if (!active) emptyList() else it.searchResults
+                searchQuery = if (!active) "" else it.searchQuery
             )
         }
+    }
+    
+    /**
+     * 切换往来邮箱区域展开状态
+     */
+    fun toggleFrequentSection() {
+        _uiState.update { it.copy(showFrequentSection = !it.showFrequentSection) }
     }
     
     /**
