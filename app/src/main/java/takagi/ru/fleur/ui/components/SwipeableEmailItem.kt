@@ -1,19 +1,9 @@
 package takagi.ru.fleur.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SwipeToDismissBox
@@ -25,7 +15,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,22 +24,15 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import takagi.ru.fleur.ui.theme.ArchiveGreen
-import takagi.ru.fleur.ui.theme.DeleteRed
-import takagi.ru.fleur.ui.theme.FleurAnimation
-import kotlin.math.absoluteValue
-import kotlin.math.roundToInt
+
+private const val SWIPE_TRIGGER_FRACTION = 0.55f
 
 /**
  * 可滑动的邮件项组件
  * 支持左右滑动手势进行归档和删除操作
- * M3E优化：400ms动画，DecelerateEasing缓动，30%触发阈值，触觉反馈
+ * M3E优化：400ms动画，DecelerateEasing缓动，55%触发阈值，触觉反馈
  * 
  * @param email 邮件对象
  * @param isSelected 是否选中
@@ -78,6 +60,7 @@ fun SwipeableEmailItem(
     onStar: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val swipeTriggerFraction = SWIPE_TRIGGER_FRACTION
     val haptic = LocalHapticFeedback.current
     var hasTriggeredHaptic by remember { mutableStateOf(false) }
     
@@ -126,16 +109,16 @@ fun SwipeableEmailItem(
                 }
             }
         },
-        // 设置滑动阈值为30%
-        positionalThreshold = { distance -> distance * 0.3f }
+        // 提高滑动触发阈值，避免误触
+        positionalThreshold = { distance -> distance * swipeTriggerFraction }
     )
     
     // 监听滑动进度，在达到阈值时触发触觉反馈
     LaunchedEffect(dismissState.progress) {
-        if (dismissState.progress >= 0.3f && !hasTriggeredHaptic) {
+        if (dismissState.progress >= swipeTriggerFraction && !hasTriggeredHaptic) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             hasTriggeredHaptic = true
-        } else if (dismissState.progress < 0.3f && hasTriggeredHaptic) {
+        } else if (dismissState.progress < swipeTriggerFraction && hasTriggeredHaptic) {
             hasTriggeredHaptic = false
         }
     }
@@ -204,10 +187,13 @@ private fun SwipeBackground(
     }
     
     // 图标缩放：根据滑动进度实时缩放
-    // 0% -> 0.8x, 30% -> 1.0x, 100% -> 1.3x
+    // 0% -> 0.8x, 触发阈值 -> 1.0x, 100% -> 1.3x
     val iconScale = when {
-        progress < 0.3f -> 0.8f + (progress / 0.3f) * 0.2f // 0.8 -> 1.0
-        else -> 1.0f + ((progress - 0.3f) / 0.7f) * 0.3f // 1.0 -> 1.3
+        progress < SWIPE_TRIGGER_FRACTION ->
+            0.8f + (progress / SWIPE_TRIGGER_FRACTION).coerceIn(0f, 1f) * 0.2f // 0.8 -> 1.0
+        else ->
+            1.0f + ((progress - SWIPE_TRIGGER_FRACTION) / (1 - SWIPE_TRIGGER_FRACTION))
+                .coerceIn(0f, 1f) * 0.3f // 1.0 -> 1.3
     }
     
     // 图标透明度：根据滑动进度实时调整

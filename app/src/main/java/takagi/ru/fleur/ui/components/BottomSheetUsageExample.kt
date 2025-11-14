@@ -13,7 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import takagi.ru.fleur.domain.model.Account
-import takagi.ru.fleur.domain.model.WebDAVConfig
+import takagi.ru.fleur.domain.model.ImapConfig
+import takagi.ru.fleur.domain.model.SmtpConfig
 
 /**
  * Modal Bottom Sheet 使用示例
@@ -87,13 +88,17 @@ fun AccountSelectorBottomSheetExample() {
             displayName = "个人邮箱",
             color = Color(0xFF1976D2),
             isDefault = true,
-            webdavConfig = WebDAVConfig(
-                serverUrl = "https://mail.example.com",
-                port = 443,
-                username = "personal@example.com",
+            imapConfig = ImapConfig(
+                host = "imap.example.com",
+                port = 993,
                 useSsl = true,
-                calendarPath = null,
-                contactsPath = null
+                username = "personal@example.com"
+            ),
+            smtpConfig = SmtpConfig(
+                host = "smtp.example.com",
+                port = 465,
+                useSsl = true,
+                username = "personal@example.com"
             )
         ),
         Account(
@@ -102,13 +107,17 @@ fun AccountSelectorBottomSheetExample() {
             displayName = "工作邮箱",
             color = Color(0xFF4CAF50),
             isDefault = false,
-            webdavConfig = WebDAVConfig(
-                serverUrl = "https://mail.company.com",
-                port = 443,
-                username = "work@company.com",
+            imapConfig = ImapConfig(
+                host = "imap.company.com",
+                port = 993,
                 useSsl = true,
-                calendarPath = null,
-                contactsPath = null
+                username = "work@company.com"
+            ),
+            smtpConfig = SmtpConfig(
+                host = "smtp.company.com",
+                port = 465,
+                useSsl = true,
+                username = "work@company.com"
             )
         ),
         Account(
@@ -117,13 +126,17 @@ fun AccountSelectorBottomSheetExample() {
             displayName = "学校邮箱",
             color = Color(0xFFFF9800),
             isDefault = false,
-            webdavConfig = WebDAVConfig(
-                serverUrl = "https://mail.university.edu",
-                port = 443,
-                username = "school@university.edu",
+            imapConfig = ImapConfig(
+                host = "imap.university.edu",
+                port = 993,
                 useSsl = true,
-                calendarPath = null,
-                contactsPath = null
+                username = "school@university.edu"
+            ),
+            smtpConfig = SmtpConfig(
+                host = "smtp.university.edu",
+                port = 465,
+                useSsl = true,
+                username = "school@university.edu"
             )
         )
     )

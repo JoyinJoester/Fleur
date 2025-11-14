@@ -14,8 +14,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import takagi.ru.fleur.ui.screens.account.AccountManagementScreen
-import takagi.ru.fleur.ui.screens.account.AddAccountScreen
+import takagi.ru.fleur.ui.screens.account.AccountManagementContainer
 import takagi.ru.fleur.ui.screens.compose.ComposeScreen
 import takagi.ru.fleur.ui.screens.detail.EmailDetailScreen
 import takagi.ru.fleur.ui.screens.folder.ArchiveScreen
@@ -126,17 +125,17 @@ fun NavGraph(
             )
         }
         
-        // 账户管理
+        // 账户管理 - 使用新的底部表单方式
         composable(Screen.AccountManagement.route) {
-            AccountManagementScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToAddAccount = { navController.navigate(Screen.AddAccount.route) }
+            AccountManagementContainer(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
         
-        // 添加账户
+        // 添加账户路由已废弃，现在通过账户管理底部表单添加
+        // 保留路由以防旧代码引用，但重定向到账户管理
         composable(Screen.AddAccount.route) {
-            AddAccountScreen(
+            AccountManagementContainer(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

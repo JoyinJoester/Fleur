@@ -130,10 +130,14 @@ sealed class Screen(val route: String) {
     
     /**
      * 对话详情
-     * 参数: conversationId (threadId)
+     * 参数: conversationId (联系人邮箱，需要URL编码)
      */
     object ChatDetail : Screen("chat/{conversationId}") {
-        fun createRoute(conversationId: String) = "chat/$conversationId"
+        fun createRoute(conversationId: String): String {
+            // 对邮箱地址进行URL编码以支持特殊字符
+            val encodedId = java.net.URLEncoder.encode(conversationId, "UTF-8")
+            return "chat/$encodedId"
+        }
     }
     
     /**

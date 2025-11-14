@@ -8,15 +8,11 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import takagi.ru.fleur.data.local.FleurDatabase
-import takagi.ru.fleur.data.local.dao.AccountDao
-import takagi.ru.fleur.data.local.dao.AttachmentDao
-import takagi.ru.fleur.data.local.dao.ContactDao
-import takagi.ru.fleur.data.local.dao.EmailDao
-import takagi.ru.fleur.data.local.dao.PendingOperationDao
-import takagi.ru.fleur.data.local.dao.SyncQueueDao
+import takagi.ru.fleur.data.local.dao.*
 import takagi.ru.fleur.data.local.migration.MIGRATION_2_3
 import takagi.ru.fleur.data.local.migration.MIGRATION_3_4
 import takagi.ru.fleur.data.local.migration.MIGRATION_4_5
+import takagi.ru.fleur.data.local.migration.MIGRATION_5_6
 import javax.inject.Singleton
 
 /**
@@ -27,6 +23,10 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
     
+    /**
+     * 提供 Fleur 数据库实例
+     * 包含所有必要的迁移策略
+     */
     @Provides
     @Singleton
     fun provideFleurDatabase(
@@ -37,43 +37,60 @@ object DatabaseModule {
             FleurDatabase::class.java,
             FleurDatabase.DATABASE_NAME
         )
-            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5) // 添加迁移策略
-            .fallbackToDestructiveMigration() // 开发阶段使用，如果迁移失败则重建
+            .addMigrations(
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6  // 账户管理 M3E 重新设计迁移
+            )
+            .fallbackToDestructiveMigration() // 开发阶段使用，生产环境应移除
             .build()
     }
     
+    /**
+     * 提供 EmailDao
+     */
     @Provides
-    @Singleton
     fun provideEmailDao(database: FleurDatabase): EmailDao {
         return database.emailDao()
     }
     
+    /**
+     * 提供 AccountDao
+     */
     @Provides
-    @Singleton
     fun provideAccountDao(database: FleurDatabase): AccountDao {
         return database.accountDao()
     }
     
+    /**
+     * 提供 AttachmentDao
+     */
     @Provides
-    @Singleton
     fun provideAttachmentDao(database: FleurDatabase): AttachmentDao {
         return database.attachmentDao()
     }
     
+    /**
+     * 提供 PendingOperationDao
+     */
     @Provides
-    @Singleton
     fun providePendingOperationDao(database: FleurDatabase): PendingOperationDao {
         return database.pendingOperationDao()
     }
     
+    /**
+     * 提供 SyncQueueDao
+     */
     @Provides
-    @Singleton
     fun provideSyncQueueDao(database: FleurDatabase): SyncQueueDao {
         return database.syncQueueDao()
     }
     
+    /**
+     * 提供 ContactDao
+     */
     @Provides
-    @Singleton
     fun provideContactDao(database: FleurDatabase): ContactDao {
         return database.contactDao()
     }

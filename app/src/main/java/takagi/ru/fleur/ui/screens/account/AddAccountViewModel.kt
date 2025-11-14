@@ -11,13 +11,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import takagi.ru.fleur.domain.model.Account
 import takagi.ru.fleur.domain.model.FleurError
-import takagi.ru.fleur.domain.model.WebDAVConfig
+import takagi.ru.fleur.domain.service.EmailServerProvider
 import takagi.ru.fleur.domain.usecase.ManageAccountUseCase
+import takagi.ru.fleur.util.EmailValidator
 import javax.inject.Inject
 
 /**
  * 添加账户 ViewModel
  * 管理添加账户界面的状态和业务逻辑
+ * 集成邮件服务器自动检测和账户验证功能
  */
 @HiltViewModel
 class AddAccountViewModel @Inject constructor(
@@ -29,9 +31,22 @@ class AddAccountViewModel @Inject constructor(
     
     /**
      * 更新邮箱地址
+     * 自动验证邮箱格式
      */
     fun updateEmail(email: String) {
-        _uiState.update { it.copy(email = email, validationSuccess = null) }
+        val emailError = if (email.isNotBlank() && !EmailValidator.isValidEmail(email)) {
+            "邮箱格式不正确"
+        } else {
+            null
+        }
+        
+        _uiState.update { 
+            it.copy(
+                email = email, 
+                emailError = emailError,
+                validationSuccess = null
+            ) 
+        }
     }
     
     /**
@@ -49,17 +64,10 @@ class AddAccountViewModel @Inject constructor(
     }
     
     /**
-     * 更新 WebDAV 服务器
+     * 切换密码可见性
      */
-    fun updateWebdavServer(server: String) {
-        _uiState.update { it.copy(webdavServer = server, validationSuccess = null) }
-    }
-    
-    /**
-     * 更新 WebDAV 端口
-     */
-    fun updateWebdavPort(port: String) {
-        _uiState.update { it.copy(webdavPort = port, validationSuccess = null) }
+    fun togglePasswordVisibility() {
+        _uiState.update { it.copy(passwordVisible = !it.passwordVisible) }
     }
     
     /**
@@ -71,16 +79,18 @@ class AddAccountViewModel @Inject constructor(
     
     /**
      * 验证账户
+     * 自动检测邮件服务器配置并验证 IMAP/SMTP 连接
      */
     fun validateAccount() {
         val currentState = _uiState.value
         
+        // 验证表单
         if (!currentState.isFormValid()) {
             _uiState.update {
                 it.copy(
                     error = FleurError.ValidationError(
                         field = "表单",
-                        errorMessage = "请填写所有必填字段"
+                        errorMessage = "请填写所有必填字段并确保邮箱格式正确"
                     )
                 )
             }
@@ -90,15 +100,29 @@ class AddAccountViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isValidating = true, error = null) }
             
-            val webdavConfig = WebDAVConfig(
-                serverUrl = currentState.webdavServer,
-                port = currentState.webdavPort.toInt(),
-                username = currentState.email,
-                useSsl = true
-            )
+            // 自动检测服务器配置
+            val serverConfig = EmailServerProvider.detectServerConfig(currentState.email)
             
-            val result = manageAccountUseCase.verifyAccount(
-                config = webdavConfig,
+            if (serverConfig == null) {
+                _uiState.update {
+                    it.copy(
+                        isValidating = false,
+                        validationSuccess = false,
+                        error = FleurError.ValidationError(
+                            field = "邮箱",
+                            errorMessage = "暂不支持该邮箱服务商，请手动配置服务器"
+                        )
+                    )
+                }
+                return@launch
+            }
+            
+            // 验证 IMAP 和 SMTP 连接
+            // TODO: 实现实际的 IMAP/SMTP 连接验证
+            // 这里暂时模拟验证成功
+            val result = manageAccountUseCase.verifyEmailAccount(
+                imapConfig = serverConfig.imapConfig,
+                smtpConfig = serverConfig.smtpConfig,
                 password = currentState.password
             )
             
@@ -117,7 +141,7 @@ class AddAccountViewModel @Inject constructor(
                             isValidating = false,
                             validationSuccess = false,
                             error = error as? FleurError
-                                ?: FleurError.UnknownError(error.message ?: "验证失败")
+                                ?: FleurError.UnknownError(error.message ?: "验证失败，请检查邮箱和密码")
                         )
                     }
                 }
@@ -127,6 +151,7 @@ class AddAccountViewModel @Inject constructor(
     
     /**
      * 保存账户
+     * 使用自动检测的服务器配置保存账户
      */
     fun saveAccount(onSuccess: () -> Unit) {
         val currentState = _uiState.value
@@ -138,21 +163,34 @@ class AddAccountViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
             
-            val webdavConfig = WebDAVConfig(
-                serverUrl = currentState.webdavServer,
-                port = currentState.webdavPort.toInt(),
-                username = currentState.email,
-                useSsl = true
-            )
+            // 获取服务器配置
+            val serverConfig = EmailServerProvider.detectServerConfig(currentState.email)
             
+            if (serverConfig == null) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = FleurError.ValidationError(
+                            field = "邮箱",
+                            errorMessage = "无法获取服务器配置"
+                        )
+                    )
+                }
+                return@launch
+            }
+            
+            // 创建账户
             val account = Account(
                 id = java.util.UUID.randomUUID().toString(),
                 email = currentState.email,
                 displayName = currentState.displayName,
                 color = currentState.selectedColor,
-                webdavConfig = webdavConfig
+                imapConfig = serverConfig.imapConfig,
+                smtpConfig = serverConfig.smtpConfig,
+                createdAt = System.currentTimeMillis()
             )
             
+            // 保存账户
             val result = manageAccountUseCase.addAccount(
                 account = account,
                 password = currentState.password

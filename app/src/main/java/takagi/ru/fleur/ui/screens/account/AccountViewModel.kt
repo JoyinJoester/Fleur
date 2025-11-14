@@ -23,8 +23,8 @@ class AccountViewModel @Inject constructor(
     private val manageAccountUseCase: ManageAccountUseCase
 ) : ViewModel() {
     
-    private val _uiState = MutableStateFlow(AccountUiState())
-    val uiState: StateFlow<AccountUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(AccountManagementUiState())
+    val uiState: StateFlow<AccountManagementUiState> = _uiState.asStateFlow()
     
     init {
         loadAccounts()
@@ -82,6 +82,20 @@ class AccountViewModel @Inject constructor(
     }
     
     /**
+     * 显示添加账户底部表单
+     */
+    fun showAddAccountSheet() {
+        _uiState.update { it.copy(showAddAccountSheet = true) }
+    }
+    
+    /**
+     * 隐藏添加账户底部表单
+     */
+    fun hideAddAccountSheet() {
+        _uiState.update { it.copy(showAddAccountSheet = false) }
+    }
+    
+    /**
      * 显示删除确认对话框
      */
     fun showDeleteDialog(account: Account) {
@@ -114,16 +128,29 @@ class AccountViewModel @Inject constructor(
         viewModelScope.launch {
             hideDeleteDialog()
             
+            // 标记账户为正在删除状态，触发退出动画
+            _uiState.update {
+                it.copy(deletingAccountIds = it.deletingAccountIds + account.id)
+            }
+            
+            // 等待动画完成（200ms）
+            kotlinx.coroutines.delay(200)
+            
             val result = manageAccountUseCase.deleteAccount(account.id)
             
             result.fold(
                 onSuccess = {
                     // 重新加载账户列表
                     loadAccounts()
+                    // 清除删除状态
+                    _uiState.update {
+                        it.copy(deletingAccountIds = it.deletingAccountIds - account.id)
+                    }
                 },
                 onFailure = { error ->
                     _uiState.update {
                         it.copy(
+                            deletingAccountIds = it.deletingAccountIds - account.id,
                             error = error as? FleurError
                                 ?: FleurError.UnknownError(error.message ?: "删除账户失败")
                         )

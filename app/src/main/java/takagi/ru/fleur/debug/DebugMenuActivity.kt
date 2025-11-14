@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import takagi.ru.fleur.ui.theme.FleurTheme
 import takagi.ru.fleur.util.TestDataInserter
+import takagi.ru.fleur.ui.screens.account.ColorContrastValidation
 
 /**
  * 调试菜单 Activity
@@ -46,6 +47,9 @@ class DebugMenuActivity : ComponentActivity() {
                     },
                     onClearData = {
                         clearTestData()
+                    },
+                    onValidateColorContrast = {
+                        validateColorContrast()
                     }
                 )
             }
@@ -94,6 +98,29 @@ class DebugMenuActivity : ComponentActivity() {
             }
         }
     }
+    
+    /**
+     * 验证颜色对比度
+     * 打印账户管理界面的颜色对比度验证报告
+     */
+    private fun validateColorContrast() {
+        lifecycleScope.launch {
+            try {
+                println("\n" + "=".repeat(60))
+                println("开始验证颜色对比度...")
+                println("=".repeat(60) + "\n")
+                
+                ColorContrastValidation.printValidationReport()
+                
+                println("\n" + "=".repeat(60))
+                println("✅ 颜色对比度验证完成，请查看上方报告")
+                println("=".repeat(60) + "\n")
+            } catch (e: Exception) {
+                println("❌ 验证失败: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
 }
 
 /**
@@ -104,7 +131,8 @@ class DebugMenuActivity : ComponentActivity() {
 fun DebugMenuScreen(
     onInsertTestEmails: (accountId: String, count: Int) -> Unit,
     onInsertTestSuite: (accountId: String) -> Unit,
-    onClearData: () -> Unit
+    onClearData: () -> Unit,
+    onValidateColorContrast: () -> Unit
 ) {
     var accountId by remember { mutableStateOf("test_account_001") }
     var emailCount by remember { mutableStateOf("20") }
@@ -168,6 +196,22 @@ fun DebugMenuScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("插入测试套件（推荐）")
+            }
+            
+            Divider()
+            
+            // 验证颜色对比度按钮
+            Button(
+                onClick = {
+                    onValidateColorContrast()
+                    statusMessage = "正在验证颜色对比度，请查看 Logcat..."
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                )
+            ) {
+                Text("验证颜色对比度 (WCAG)")
             }
             
             Divider()

@@ -55,6 +55,30 @@ interface EmailDao {
     fun getEmailThread(threadId: String): Flow<List<EmailEntity>>
     
     /**
+     * 获取与指定联系人的所有邮件（用于聊天列表）
+     * 查询逻辑：
+     * 1. 联系人作为发件人发给当前用户
+     * 2. 当前用户发送给联系人（联系人在收件人或抄送中）
+     * @param accountId 当前用户账户ID
+     * @param contactEmail 联系人邮箱地址
+     */
+    @Query("""
+        SELECT * FROM emails 
+        WHERE (:accountId IS NULL OR account_id = :accountId)
+          AND (
+              LOWER(from_address) = :contactEmail
+              OR (LOWER(COALESCE(to_addresses, '')) LIKE '%"address":"' || :contactEmail || '"%'
+                  OR LOWER(COALESCE(cc_addresses, '')) LIKE '%"address":"' || :contactEmail || '"%'
+                  OR LOWER(COALESCE(bcc_addresses, '')) LIKE '%"address":"' || :contactEmail || '"%')
+          )
+        ORDER BY timestamp ASC
+    """)
+    fun getEmailsByContact(
+        accountId: String?,
+        contactEmail: String
+    ): Flow<List<EmailEntity>>
+    
+    /**
      * 搜索邮件
      * @param query 搜索关键词
      */

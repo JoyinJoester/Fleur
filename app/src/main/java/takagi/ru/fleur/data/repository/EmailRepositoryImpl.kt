@@ -156,6 +156,34 @@ class EmailRepositoryImpl @Inject constructor(
     }
     
     /**
+     * 获取与指定联系人的所有邮件（用于聊天详情）
+     */
+    override fun getEmailsByContact(
+        accountId: String?,
+        contactEmail: String
+    ): Flow<Result<List<Email>>> = flow {
+        Log.d(TAG, "查询与联系人的邮件 - accountId: $accountId, contactEmail: $contactEmail")
+        emailDao.getEmailsByContact(accountId, contactEmail)
+            .map { entities ->
+                Log.d(TAG, "查询到 ${entities.size} 封邮件")
+                val emails = entities.map { entity ->
+                    val attachments = attachmentDao.getAttachmentsByEmailId(entity.id)
+                        .first()
+                        .map { it.toDomain() }
+                    entity.toDomain(attachments)
+                }
+                Result.success(emails)
+            }
+            .catch { e ->
+                Log.e(TAG, "查询邮件失败", e)
+                emit(Result.failure(FleurError.DatabaseError(e.message ?: "数据库错误")))
+            }
+            .collect { result ->
+                emit(result)
+            }
+    }
+    
+    /**
      * 搜索邮件
      * 自动对结果进行去重，确保每个邮件ID只出现一次
      */

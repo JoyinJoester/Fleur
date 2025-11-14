@@ -5,20 +5,21 @@ import takagi.ru.fleur.ui.model.ConversationUiModel
 
 /**
  * 对话映射器
- * 将邮件线程转换为对话 UI 模型
+ * 将邮件按联系人聚合转换为对话 UI 模型
  */
 object ConversationMapper {
     
     /**
-     * 从邮件线程创建对话模型
+     * 从与某联系人的所有邮件创建对话模型
+     * 聊天列表按联系人聚合：同一联系人的所有邮件显示在一个对话卡片中
      * 
-     * @param threadId 线程ID
-     * @param emails 线程中的所有邮件，应按时间排序
+     * @param contactEmail 联系人邮箱地址（作为对话唯一标识）
+     * @param emails 与该联系人的所有邮件，应按时间排序
      * @param currentUserEmail 当前用户邮箱地址，用于判断联系人
      * @return 对话 UI 模型
      */
-    fun fromEmailThread(
-        threadId: String,
+    fun fromContactEmails(
+        contactEmail: String,
         emails: List<Email>,
         currentUserEmail: String
     ): ConversationUiModel {
@@ -35,9 +36,10 @@ object ConversationMapper {
         
         // 确定联系人信息（对话中的另一方）
         val contact = determineContact(latestEmail, currentUserEmail)
+        val normalizedContactEmail = contact.address.lowercase()
         
         return ConversationUiModel(
-            id = threadId,
+            id = normalizedContactEmail,
             contactName = contact.name ?: contact.address,
             contactEmail = contact.address,
             contactAvatar = null, // TODO: 从联系人系统获取头像
@@ -45,7 +47,8 @@ object ConversationMapper {
             lastMessageTime = latestEmail.timestamp,
             unreadCount = unreadCount,
             hasAttachment = hasAttachment,
-            isPinned = false
+            isPinned = false,
+            emailIds = emails.map { it.id }
         )
     }
     

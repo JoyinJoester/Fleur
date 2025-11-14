@@ -59,12 +59,27 @@ interface AccountRepository {
     suspend fun setDefaultAccount(accountId: String): Result<Unit>
     
     /**
-     * 验证账户配置
+     * 验证邮件账户配置
+     * 测试 IMAP 和 SMTP 连接是否有效
+     * @param imapConfig IMAP 配置
+     * @param smtpConfig SMTP 配置
+     * @param password 密码
+     * @return Result<Boolean> 验证结果，true表示验证成功
+     */
+    suspend fun verifyEmailAccount(
+        imapConfig: takagi.ru.fleur.domain.model.ImapConfig,
+        smtpConfig: takagi.ru.fleur.domain.model.SmtpConfig,
+        password: String
+    ): Result<Boolean>
+    
+    /**
+     * 验证账户配置（已废弃）
      * 测试WebDAV连接是否有效
      * @param config WebDAV配置
      * @param password 密码
      * @return Result<Boolean> 验证结果，true表示验证成功
      */
+    @Deprecated("使用 verifyEmailAccount 代替")
     suspend fun verifyAccount(config: WebDAVConfig, password: String): Result<Boolean>
     
     /**

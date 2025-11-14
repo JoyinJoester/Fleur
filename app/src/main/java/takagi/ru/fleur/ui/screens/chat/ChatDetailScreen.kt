@@ -292,6 +292,7 @@ fun ChatDetailScreen(
                     else -> {
                         MessageList(
                             messages = uiState.messages,
+                            currentUserEmail = uiState.currentUserEmail,
                             isRefreshing = uiState.isRefreshing,
                             onRefresh = { viewModel.refresh() },
                             onMessageClick = { /* TODO: 处理消息点击 */ },
@@ -393,10 +394,16 @@ fun ChatDetailScreen(
  * @param onMessageLongClick 消息长按回调
  * @param listState 列表状态
  */
+private data class MessageGroupingInfo(
+    val hasOlderSameSender: Boolean,
+    val hasNewerSameSender: Boolean
+)
+
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun MessageList(
     messages: List<takagi.ru.fleur.ui.model.MessageUiModel>,
+    currentUserEmail: String,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onMessageClick: (takagi.ru.fleur.ui.model.MessageUiModel) -> Unit,
@@ -414,6 +421,29 @@ private fun MessageList(
         modifier = Modifier.fillMaxSize()
     )
     
+    val chronologicalMessages = remember(messages) { messages.sortedBy { it.timestamp } }
+    val groupingInfo = remember(messages) {
+        chronologicalMessages.mapIndexed { index, message ->
+            val olderMessage = chronologicalMessages.getOrNull(index - 1)
+            val newerMessage = chronologicalMessages.getOrNull(index + 1)
+            
+            // 检查是否与前一条消息在同一天且是同一发送者
+            val hasOlderSameSender = olderMessage != null &&
+                olderMessage.senderId == message.senderId &&
+                isSameDay(olderMessage.timestamp, message.timestamp)
+            
+            // 检查是否与后一条消息在同一天且是同一发送者
+            val hasNewerSameSender = newerMessage != null &&
+                newerMessage.senderId == message.senderId &&
+                isSameDay(newerMessage.timestamp, message.timestamp)
+            
+            message.id to MessageGroupingInfo(
+                hasOlderSameSender = hasOlderSameSender,
+                hasNewerSameSender = hasNewerSameSender
+            )
+        }.toMap()
+    }
+
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -428,23 +458,19 @@ private fun MessageList(
             item(key = message.id) {
                 // 判断是否为发送的消息
                 // TODO: 从当前用户信息判断
-                val isSent = false // 暂时默认为接收的消息
+                val isSent = message.senderId.equals(currentUserEmail, ignoreCase = true)
                 
                 // 计算前后消息引用（用于分组逻辑）
-                val previousMessage = if (index > 0) reversedMessages[index - 1] else null
-                val nextMessage = if (index < reversedMessages.size - 1) reversedMessages[index + 1] else null
+                val grouping = groupingInfo[message.id]
+                val hasNewerSameSender = grouping?.hasNewerSameSender ?: false
+                val hasOlderSameSender = grouping?.hasOlderSameSender ?: false
+
+                val isGroupedWithPrevious = hasNewerSameSender
+                val isGroupedWithNext = hasOlderSameSender
                 
-                // 计算分组状态
-                val isGroupedWithPrevious = previousMessage != null && 
-                    takagi.ru.fleur.ui.screens.chat.components.isSameGroup(message, previousMessage)
-                val isGroupedWithNext = nextMessage != null && 
-                    takagi.ru.fleur.ui.screens.chat.components.isSameGroup(message, nextMessage)
-                
-                // 计算显示配置
                 val displayConfig = takagi.ru.fleur.ui.screens.chat.components.calculateMessageDisplayConfig(
-                    currentMessage = message,
-                    previousMessage = previousMessage,
-                    nextMessage = nextMessage
+                    hasNewerSameSender = hasNewerSameSender,
+                    hasOlderSameSender = hasOlderSameSender
                 )
                 
                 // 计算垂直间距（同组 2dp，不同组 4dp）

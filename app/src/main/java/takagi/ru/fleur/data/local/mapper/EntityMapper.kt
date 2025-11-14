@@ -14,7 +14,6 @@ import takagi.ru.fleur.domain.model.Attachment
 import takagi.ru.fleur.domain.model.Contact
 import takagi.ru.fleur.domain.model.Email
 import takagi.ru.fleur.domain.model.EmailAddress
-import takagi.ru.fleur.domain.model.WebDAVConfig
 
 /**
  * Entity 和 Domain Model 之间的映射器
@@ -84,6 +83,7 @@ object EntityMapper {
     
     /**
      * AccountEntity -> Account
+     * 将数据库实体转换为领域模型
      */
     fun AccountEntity.toDomain(): Account {
         return Account(
@@ -92,19 +92,25 @@ object EntityMapper {
             displayName = displayName,
             color = Color(color),
             isDefault = isDefault,
-            webdavConfig = WebDAVConfig(
-                serverUrl = serverUrl,
-                port = port,
-                username = username,
-                useSsl = useSsl,
-                calendarPath = calendarPath,
-                contactsPath = contactsPath
-            )
+            imapConfig = takagi.ru.fleur.domain.model.ImapConfig(
+                host = imapHost,
+                port = imapPort,
+                useSsl = imapUseSsl,
+                username = imapUsername
+            ),
+            smtpConfig = takagi.ru.fleur.domain.model.SmtpConfig(
+                host = smtpHost,
+                port = smtpPort,
+                useSsl = smtpUseSsl,
+                username = smtpUsername
+            ),
+            createdAt = createdAt
         )
     }
     
     /**
      * Account -> AccountEntity
+     * 将领域模型转换为数据库实体
      */
     fun Account.toEntity(): AccountEntity {
         return AccountEntity(
@@ -113,12 +119,15 @@ object EntityMapper {
             displayName = displayName,
             color = color.toArgb(),
             isDefault = isDefault,
-            serverUrl = webdavConfig.serverUrl,
-            port = webdavConfig.port,
-            username = webdavConfig.username,
-            useSsl = webdavConfig.useSsl,
-            calendarPath = webdavConfig.calendarPath,
-            contactsPath = webdavConfig.contactsPath
+            imapHost = imapConfig.host,
+            imapPort = imapConfig.port,
+            imapUseSsl = imapConfig.useSsl,
+            imapUsername = imapConfig.username,
+            smtpHost = smtpConfig.host,
+            smtpPort = smtpConfig.port,
+            smtpUseSsl = smtpConfig.useSsl,
+            smtpUsername = smtpConfig.username,
+            createdAt = createdAt
         )
     }
     

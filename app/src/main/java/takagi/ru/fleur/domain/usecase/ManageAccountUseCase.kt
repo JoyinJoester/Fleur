@@ -63,8 +63,21 @@ class ManageAccountUseCase @Inject constructor(
     }
     
     /**
-     * 验证账户配置
+     * 验证邮件账户配置
+     * 验证 IMAP 和 SMTP 服务器连接
      */
+    suspend fun verifyEmailAccount(
+        imapConfig: takagi.ru.fleur.domain.model.ImapConfig,
+        smtpConfig: takagi.ru.fleur.domain.model.SmtpConfig,
+        password: String
+    ): Result<Boolean> {
+        return accountRepository.verifyEmailAccount(imapConfig, smtpConfig, password)
+    }
+    
+    /**
+     * 验证账户配置（已废弃，保留用于向后兼容）
+     */
+    @Deprecated("使用 verifyEmailAccount 代替")
     suspend fun verifyAccount(config: WebDAVConfig, password: String): Result<Boolean> {
         return accountRepository.verifyAccount(config, password)
     }

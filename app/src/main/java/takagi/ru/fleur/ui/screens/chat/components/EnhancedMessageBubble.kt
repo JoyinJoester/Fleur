@@ -196,25 +196,26 @@ private fun MessageBubbleCard(
         }
         // 分组中的第一条：顶部圆角，底部圆角（无尖角）
         !isGroupedWithPrevious && isGroupedWithNext -> {
-            RoundedCornerShape(16.dp, 16.dp, 16.dp, 16.dp)
-        }
-        // 分组中的最后一条：顶部圆角，底部有尖角
-        isGroupedWithPrevious && !isGroupedWithNext -> {
+            // 组内最新的一条，仍保留尖角
             if (isSent) {
                 RoundedCornerShape(
                     topStart = 16.dp,
                     topEnd = 16.dp,
                     bottomStart = 16.dp,
-                    bottomEnd = 4.dp  // 右下尖角
+                    bottomEnd = 4.dp
                 )
             } else {
                 RoundedCornerShape(
                     topStart = 16.dp,
                     topEnd = 16.dp,
-                    bottomStart = 4.dp,  // 左下尖角
+                    bottomStart = 4.dp,
                     bottomEnd = 16.dp
                 )
             }
+        }
+        // 分组中的最旧一条：全部圆角
+        isGroupedWithPrevious && !isGroupedWithNext -> {
+            RoundedCornerShape(16.dp)
         }
         // 分组中的中间消息：全部圆角
         else -> {
@@ -588,34 +589,28 @@ data class MessageDisplayConfig(
  * @return 消息显示配置
  */
 fun calculateMessageDisplayConfig(
-    currentMessage: MessageUiModel,
-    previousMessage: MessageUiModel?,
-    nextMessage: MessageUiModel?
+    hasNewerSameSender: Boolean,
+    hasOlderSameSender: Boolean
 ): MessageDisplayConfig {
-    val isGroupedWithPrevious = previousMessage != null && 
-        isSameGroup(currentMessage, previousMessage)
-    val isGroupedWithNext = nextMessage != null && 
-        isSameGroup(currentMessage, nextMessage)
-    
     return when {
         // 单独消息（不在分组内）
-        !isGroupedWithPrevious && !isGroupedWithNext -> {
+        !hasNewerSameSender && !hasOlderSameSender -> {
             MessageDisplayConfig(
                 showAvatar = true,
                 showTimestamp = true,
                 showSenderName = true
             )
         }
-        // 分组内第一条消息
-        !isGroupedWithPrevious && isGroupedWithNext -> {
+        // 分组内最新的一条消息（靠近底部）
+        !hasNewerSameSender && hasOlderSameSender -> {
             MessageDisplayConfig(
                 showAvatar = false,
                 showTimestamp = true,
                 showSenderName = true
             )
         }
-        // 分组内最后一条消息
-        isGroupedWithPrevious && !isGroupedWithNext -> {
+        // 分组内最旧的一条消息（靠近顶部）
+        hasNewerSameSender && !hasOlderSameSender -> {
             MessageDisplayConfig(
                 showAvatar = true,
                 showTimestamp = false,
@@ -631,32 +626,4 @@ fun calculateMessageDisplayConfig(
             )
         }
     }
-}
-
-/**
- * 判断两条消息是否属于同一分组
- * 
- * 分组条件：
- * 1. 同一发送者
- * 2. 时间间隔小于 5 分钟
- * 
- * @param message1 第一条消息
- * @param message2 第二条消息
- * @return 是否属于同一分组
- */
-fun isSameGroup(
-    message1: MessageUiModel,
-    message2: MessageUiModel
-): Boolean {
-    // 检查是否同一发送者
-    if (message1.senderId != message2.senderId) {
-        return false
-    }
-    
-    // 检查时间间隔是否小于 5 分钟
-    val timeDiff = kotlin.math.abs(
-        (message1.timestamp - message2.timestamp).inWholeMinutes
-    )
-    
-    return timeDiff < 5
 }

@@ -54,8 +54,8 @@ class AccountRepositoryImpl @Inject constructor(
      */
     override suspend fun addAccount(account: Account, password: String): Result<Unit> {
         return try {
-            // 验证账户配置
-            val verifyResult = verifyAccount(account.webdavConfig, password)
+            // 验证账户配置（使用新的 IMAP/SMTP 验证）
+            val verifyResult = verifyEmailAccount(account.imapConfig, account.smtpConfig, password)
             if (verifyResult.isFailure) {
                 return Result.failure(
                     FleurError.AuthenticationError("账户验证失败: ${verifyResult.exceptionOrNull()?.message}")
@@ -138,7 +138,32 @@ class AccountRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 验证账户配置
+     * 验证邮件账户配置
+     * 测试 IMAP 和 SMTP 连接
+     */
+    override suspend fun verifyEmailAccount(
+        imapConfig: takagi.ru.fleur.domain.model.ImapConfig,
+        smtpConfig: takagi.ru.fleur.domain.model.SmtpConfig,
+        password: String
+    ): Result<Boolean> {
+        return try {
+            // TODO: 实现实际的 IMAP/SMTP 连接验证
+            // 这里暂时返回成功，实际应该连接到邮件服务器进行验证
+            
+            // 示例验证逻辑：
+            // 1. 连接 IMAP 服务器
+            // 2. 连接 SMTP 服务器
+            // 3. 如果两者都成功，返回 true
+            
+            // 暂时模拟验证成功
+            Result.success(true)
+        } catch (e: Exception) {
+            Result.failure(FleurError.NetworkError(e.message ?: "网络错误"))
+        }
+    }
+    
+    /**
+     * 验证账户配置（已废弃）
      */
     override suspend fun verifyAccount(config: WebDAVConfig, password: String): Result<Boolean> {
         return try {

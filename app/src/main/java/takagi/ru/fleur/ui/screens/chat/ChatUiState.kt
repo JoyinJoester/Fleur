@@ -20,5 +20,7 @@ data class ChatUiState(
     val isLoadingMore: Boolean = false,
     val error: String? = null,
     val hasMore: Boolean = true,
-    val currentPage: Int = 0
+    val currentPage: Int = 0,
+    val selectedConversationIds: Set<String> = emptySet(),
+    val isMultiSelectMode: Boolean = false
 )

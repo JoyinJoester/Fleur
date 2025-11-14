@@ -11,7 +11,7 @@ import javax.inject.Inject
 /**
  * 获取对话消息列表用例
  * 
- * 获取指定线程（对话）中的所有消息
+ * 获取与指定联系人的所有消息
  * 消息按时间升序排序（最早的在前）
  */
 class GetConversationMessagesUseCase @Inject constructor(
@@ -21,19 +21,22 @@ class GetConversationMessagesUseCase @Inject constructor(
     /**
      * 执行用例
      * 
-     * @param threadId 线程ID（对话ID）
+     * @param contactEmail 联系人邮箱地址（对话ID）
+     * @param accountId 当前用户账户ID
      * @param currentUserEmail 当前用户邮箱地址，用于判断消息方向
      * @return Flow<Result<List<MessageUiModel>>> 消息列表流
      */
     operator fun invoke(
-        threadId: String,
+        contactEmail: String,
+        accountId: String?,
         currentUserEmail: String
     ): Flow<Result<List<MessageUiModel>>> {
-        return emailRepository.getEmailThread(threadId).map { result ->
-            result.mapCatching { emailThread ->
+        val normalizedContact = contactEmail.trim().lowercase()
+        return emailRepository.getEmailsByContact(accountId, normalizedContact).map { result ->
+            result.mapCatching { emails ->
                 // 将邮件列表转换为消息列表
                 val messages = MessageMapper.fromEmailList(
-                    emails = emailThread.emails,
+                    emails = emails,
                     currentUserEmail = currentUserEmail
                 )
                 

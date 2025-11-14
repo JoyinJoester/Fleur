@@ -10,7 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import takagi.ru.fleur.domain.model.Account
-import takagi.ru.fleur.domain.model.WebDAVConfig
+import takagi.ru.fleur.domain.model.ImapConfig
+import takagi.ru.fleur.domain.model.SmtpConfig
 
 /**
  * FleurNavigationDrawer 使用示例
@@ -34,13 +35,17 @@ fun NavigationDrawerBasicExample() {
         displayName = "用户名",
         color = Color(0xFF1976D2),
         isDefault = true,
-        webdavConfig = WebDAVConfig(
-            serverUrl = "https://mail.example.com",
-            port = 443,
-            username = "user@example.com",
+        imapConfig = ImapConfig(
+            host = "imap.example.com",
+            port = 993,
             useSsl = true,
-            calendarPath = null,
-            contactsPath = null
+            username = "user@example.com"
+        ),
+        smtpConfig = SmtpConfig(
+            host = "smtp.example.com",
+            port = 465,
+            useSsl = true,
+            username = "user@example.com"
         )
     )
     
@@ -52,13 +57,17 @@ fun NavigationDrawerBasicExample() {
             displayName = "工作邮箱",
             color = Color(0xFF4CAF50),
             isDefault = false,
-            webdavConfig = WebDAVConfig(
-                serverUrl = "https://mail.company.com",
-                port = 443,
-                username = "work@company.com",
+            imapConfig = ImapConfig(
+                host = "imap.company.com",
+                port = 993,
                 useSsl = true,
-                calendarPath = null,
-                contactsPath = null
+                username = "work@company.com"
+            ),
+            smtpConfig = SmtpConfig(
+                host = "smtp.company.com",
+                port = 465,
+                useSsl = true,
+                username = "work@company.com"
             )
         )
     )

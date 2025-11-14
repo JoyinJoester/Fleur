@@ -40,6 +40,14 @@ interface EmailRepository {
     fun getEmailThread(threadId: String): Flow<Result<EmailThread>>
     
     /**
+     * 获取与指定联系人的所有邮件（用于聊天详情）
+     * @param accountId 账户ID
+     * @param contactEmail 联系人邮箱地址
+     * @return Flow<Result<List<Email>>> 邮件列表流
+     */
+    fun getEmailsByContact(accountId: String?, contactEmail: String): Flow<Result<List<Email>>>
+    
+    /**
      * 搜索邮件
      * @param query 搜索关键词
      * @param filters 搜索过滤器

@@ -39,6 +39,7 @@ data class ChatDetailUiState(
     val conversationId: String = "",
     val contactName: String = "",
     val contactEmail: String = "",
+    val currentUserEmail: String = "",
     val searchQuery: String = "",
     val searchResults: List<MessageUiModel> = emptyList(),
     val currentSearchResultIndex: Int = 0

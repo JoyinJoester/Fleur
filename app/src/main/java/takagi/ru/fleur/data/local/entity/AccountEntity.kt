@@ -2,12 +2,20 @@ package takagi.ru.fleur.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * 账户数据库实体
+ * 存储邮件账户信息，包括 IMAP 和 SMTP 服务器配置
  */
-@Entity(tableName = "accounts")
+@Entity(
+    tableName = "accounts",
+    indices = [
+        Index(value = ["email"]),
+        Index(value = ["is_default"])
+    ]
+)
 data class AccountEntity(
     @PrimaryKey
     @ColumnInfo(name = "id")
@@ -25,22 +33,33 @@ data class AccountEntity(
     @ColumnInfo(name = "is_default")
     val isDefault: Boolean,
     
-    // WebDAV 配置
-    @ColumnInfo(name = "server_url")
-    val serverUrl: String,
+    // IMAP 配置
+    @ColumnInfo(name = "imap_host")
+    val imapHost: String,
     
-    @ColumnInfo(name = "port")
-    val port: Int,
+    @ColumnInfo(name = "imap_port")
+    val imapPort: Int,
     
-    @ColumnInfo(name = "username")
-    val username: String,
+    @ColumnInfo(name = "imap_use_ssl")
+    val imapUseSsl: Boolean,
     
-    @ColumnInfo(name = "use_ssl")
-    val useSsl: Boolean,
+    @ColumnInfo(name = "imap_username")
+    val imapUsername: String,
     
-    @ColumnInfo(name = "calendar_path")
-    val calendarPath: String?,
+    // SMTP 配置
+    @ColumnInfo(name = "smtp_host")
+    val smtpHost: String,
     
-    @ColumnInfo(name = "contacts_path")
-    val contactsPath: String?
+    @ColumnInfo(name = "smtp_port")
+    val smtpPort: Int,
+    
+    @ColumnInfo(name = "smtp_use_ssl")
+    val smtpUseSsl: Boolean,
+    
+    @ColumnInfo(name = "smtp_username")
+    val smtpUsername: String,
+    
+    // 时间戳
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long
 )

@@ -8,11 +8,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import takagi.ru.fleur.domain.repository.AccountRepository
 import takagi.ru.fleur.domain.usecase.GetConversationsUseCase
+import takagi.ru.fleur.domain.usecase.MarkAsReadUseCase
+import takagi.ru.fleur.ui.screens.chat.model.ConversationAction
 import javax.inject.Inject
 
 /**
@@ -24,7 +28,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val getConversationsUseCase: GetConversationsUseCase,
-    private val accountRepository: AccountRepository
+    private val accountRepository: AccountRepository,
+    private val markAsReadUseCase: MarkAsReadUseCase
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -80,7 +85,9 @@ class ChatViewModel @Inject constructor(
                                     isLoading = false,
                                     error = null,
                                     currentPage = 0,
-                                    hasMore = conversations.size >= PAGE_SIZE
+                                    hasMore = conversations.size >= PAGE_SIZE,
+                                    selectedConversationIds = emptySet(),
+                                    isMultiSelectMode = false
                                 )
                             }
                         },
@@ -150,7 +157,9 @@ class ChatViewModel @Inject constructor(
                                     isRefreshing = false,
                                     error = null,
                                     currentPage = 0,
-                                    hasMore = conversations.size >= PAGE_SIZE
+                                    hasMore = conversations.size >= PAGE_SIZE,
+                                    selectedConversationIds = emptySet(),
+                                    isMultiSelectMode = false
                                 )
                             }
                         },
@@ -227,7 +236,9 @@ class ChatViewModel @Inject constructor(
                                     conversations = it.conversations + newConversations,
                                     isLoadingMore = false,
                                     currentPage = nextPage,
-                                    hasMore = newConversations.size >= PAGE_SIZE
+                                    hasMore = newConversations.size >= PAGE_SIZE,
+                                    selectedConversationIds = it.selectedConversationIds.intersect((it.conversations + newConversations).map { convo -> convo.id }.toSet()),
+                                    isMultiSelectMode = it.selectedConversationIds.isNotEmpty()
                                 )
                             }
                         },
@@ -263,6 +274,178 @@ class ChatViewModel @Inject constructor(
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
+
+    fun toggleConversationSelection(conversationId: String) {
+        _uiState.update { state ->
+            val newSelection = if (state.selectedConversationIds.contains(conversationId)) {
+                state.selectedConversationIds - conversationId
+            } else {
+                state.selectedConversationIds + conversationId
+            }
+
+            state.copy(
+                selectedConversationIds = newSelection,
+                isMultiSelectMode = newSelection.isNotEmpty()
+            )
+        }
+    }
+
+    fun enterSelectionMode(conversationId: String) {
+        _uiState.update {
+            it.copy(
+                selectedConversationIds = setOf(conversationId),
+                isMultiSelectMode = true
+            )
+        }
+    }
+
+    fun clearSelection() {
+        _uiState.update {
+            it.copy(
+                selectedConversationIds = emptySet(),
+                isMultiSelectMode = false
+            )
+        }
+    }
+
+    fun deleteConversation(conversationId: String) {
+        _uiState.update { state ->
+            val updatedList = state.conversations.filterNot { it.id == conversationId }
+            val newSelection = state.selectedConversationIds - conversationId
+            state.copy(
+                conversations = updatedList,
+                selectedConversationIds = newSelection,
+                isMultiSelectMode = newSelection.isNotEmpty()
+            )
+        }
+    }
+
+    fun deleteSelectedConversations() {
+        val selectedIds = _uiState.value.selectedConversationIds
+        if (selectedIds.isEmpty()) return
+
+        _uiState.update { state ->
+            state.copy(
+                conversations = state.conversations.filterNot { selectedIds.contains(it.id) },
+                selectedConversationIds = emptySet(),
+                isMultiSelectMode = false
+            )
+        }
+    }
+
+    fun markConversationAsRead(conversationId: String) {
+        val changed = updateConversation(conversationId) { conversation ->
+            if (conversation.unreadCount > 0) {
+                conversation.copy(unreadCount = 0)
+            } else {
+                conversation
+            }
+        }
+        if (changed) {
+            persistConversationReadState(setOf(conversationId), isRead = true)
+        }
+    }
+
+    fun markConversationAsUnread(conversationId: String) {
+        val changed = updateConversation(conversationId) { conversation ->
+            if (conversation.unreadCount == 0) {
+                conversation.copy(unreadCount = 1)
+            } else {
+                conversation
+            }
+        }
+        if (changed) {
+            persistConversationReadState(setOf(conversationId), isRead = false)
+        }
+    }
+
+    fun markSelectedConversationsAsRead() {
+        val selectedIds = _uiState.value.selectedConversationIds
+        if (selectedIds.isEmpty()) return
+        _uiState.update { state ->
+            val updated = state.conversations.map { conversation ->
+                if (selectedIds.contains(conversation.id)) {
+                    conversation.copy(unreadCount = 0)
+                } else {
+                    conversation
+                }
+            }
+            state.copy(
+                conversations = updated,
+                selectedConversationIds = emptySet(),
+                isMultiSelectMode = false
+            )
+        }
+        persistConversationReadState(selectedIds, isRead = true)
+    }
+
+    fun markSelectedConversationsAsUnread() {
+        val selectedIds = _uiState.value.selectedConversationIds
+        if (selectedIds.isEmpty()) return
+        _uiState.update { state ->
+            val updated = state.conversations.map { conversation ->
+                if (selectedIds.contains(conversation.id)) {
+                    conversation.copy(unreadCount = if (conversation.unreadCount == 0) 1 else conversation.unreadCount)
+                } else {
+                    conversation
+                }
+            }
+            state.copy(
+                conversations = updated,
+                selectedConversationIds = emptySet(),
+                isMultiSelectMode = false
+            )
+        }
+        persistConversationReadState(selectedIds, isRead = false)
+    }
+
+    fun handleSwipeAction(action: ConversationAction, conversationId: String) {
+        when (action) {
+            ConversationAction.Delete -> deleteConversation(conversationId)
+            ConversationAction.MarkRead -> markConversationAsRead(conversationId)
+            ConversationAction.MarkUnread -> markConversationAsUnread(conversationId)
+        }
+    }
+
+    private fun updateConversation(
+        conversationId: String,
+        transform: (takagi.ru.fleur.ui.model.ConversationUiModel) -> takagi.ru.fleur.ui.model.ConversationUiModel
+    ): Boolean {
+        var changed = false
+        _uiState.update { state ->
+            val updated = state.conversations.map { conversation ->
+                if (conversation.id == conversationId) {
+                    val newConversation = transform(conversation)
+                    if (newConversation != conversation) {
+                        changed = true
+                    }
+                    newConversation
+                } else {
+                    conversation
+                }
+            }
+            state.copy(conversations = updated)
+        }
+        return changed
+    }
+
+    private fun persistConversationReadState(conversationIds: Set<String>, isRead: Boolean) {
+        if (conversationIds.isEmpty()) return
+        val emailIds = _uiState.value.conversations
+            .filter { conversationIds.contains(it.id) }
+            .flatMap { it.emailIds }
+            .distinct()
+        if (emailIds.isEmpty()) return
+
+        viewModelScope.launch {
+            val result = markAsReadUseCase.markMultiple(emailIds, isRead)
+            if (result.isFailure) {
+                _uiState.update {
+                    it.copy(error = result.exceptionOrNull()?.message ?: "更新阅读状态失败")
+                }
+            }
+        }
+    }
     
     /**
      * 获取当前账户ID
@@ -270,8 +453,13 @@ class ChatViewModel @Inject constructor(
      * @return 账户ID，如果没有账户则返回 null
      */
     private suspend fun getCurrentAccountId(): String? {
-        // TODO: 从 AccountRepository 获取当前账户
-        // 这里暂时返回 null，表示获取所有账户的对话
-        return null
+        return try {
+            val defaultAccount = accountRepository.getDefaultAccount().firstOrNull()
+            val account = defaultAccount ?: accountRepository.getAccounts().firstOrNull()?.firstOrNull()
+            account?.id
+        } catch (e: Exception) {
+            Log.e(TAG, "获取当前账户ID失败", e)
+            null
+        }
     }
 }

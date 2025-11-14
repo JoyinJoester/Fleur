@@ -27,5 +27,6 @@ data class ConversationUiModel(
     val lastMessageTime: Instant,
     val unreadCount: Int,
     val hasAttachment: Boolean,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val emailIds: List<String> = emptyList()
 )

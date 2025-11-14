@@ -18,7 +18,7 @@ import takagi.ru.fleur.data.local.entity.SyncOperation
 /**
  * Fleur 数据库
  * 
- * 版本: 5 (添加联系人存储)
+ * 版本: 6 (账户管理 M3E 重新设计)
  * 实体: EmailEntity, AccountEntity, AttachmentEntity, PendingOperationEntity, SyncOperation, ContactEntity
  * 
  * 版本历史:
@@ -27,6 +27,7 @@ import takagi.ru.fleur.data.local.entity.SyncOperation
  * - v3: 添加 body_markdown 和 content_type 字段
  * - v4: 添加 SyncOperation 实体用于本地优先架构
  * - v5: 添加 ContactEntity 用于存储用户保存的联系人
+ * - v6: 账户表重构 - 移除 WebDAV 配置，添加 IMAP/SMTP 配置和时间戳
  */
 @Database(
     entities = [
@@ -37,7 +38,7 @@ import takagi.ru.fleur.data.local.entity.SyncOperation
         SyncOperation::class,
         ContactEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class FleurDatabase : RoomDatabase() {

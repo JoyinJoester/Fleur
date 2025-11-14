@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import takagi.ru.fleur.domain.model.Attachment
@@ -38,8 +40,16 @@ class ChatDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ChatDetailUiState())
     val uiState: StateFlow<ChatDetailUiState> = _uiState.asStateFlow()
     
-    // 从导航参数获取对话ID
-    private val conversationId: String = savedStateHandle.get<String>("conversationId") ?: ""
+    // 从导航参数获取对话ID（联系人邮箱，需要URL解码）
+    private val conversationId: String = run {
+        val encodedId = savedStateHandle.get<String>("conversationId") ?: ""
+        try {
+            java.net.URLDecoder.decode(encodedId, "UTF-8")
+        } catch (e: Exception) {
+            Log.e(TAG, "解码对话ID失败: $encodedId", e)
+            encodedId
+        }
+    }
     
     companion object {
         private const val TAG = "ChatDetailViewModel"
@@ -47,7 +57,7 @@ class ChatDetailViewModel @Inject constructor(
     }
     
     init {
-        // 初始化对话ID
+        // 初始化对话ID（即联系人邮箱）
         _uiState.update { it.copy(conversationId = conversationId) }
         
         // 加载消息列表
@@ -66,12 +76,21 @@ class ChatDetailViewModel @Inject constructor(
                 // 设置加载状态
                 _uiState.update { it.copy(isLoading = true, error = null) }
                 
-                // 获取当前用户邮箱
-                val currentUserEmail = getCurrentUserEmail()
+                // 获取当前账户和邮箱
+                val currentAccount = getCurrentAccount()
+                val currentUserEmail = currentAccount?.email ?: ""
+                val accountId = currentAccount?.id
+                _uiState.update { it.copy(currentUserEmail = currentUserEmail) }
+                if (currentAccount == null) {
+                    Log.w(TAG, "未找到默认账户，使用所有账户的数据源")
+                }
                 
-                // 加载消息
+                Log.d(TAG, "开始加载消息 - 联系人: $conversationId, 账户: $accountId, 当前用户: $currentUserEmail")
+                
+                // 加载消息（conversationId 就是联系人邮箱）
                 getConversationMessagesUseCase(
-                    threadId = conversationId,
+                    contactEmail = conversationId,
+                    accountId = accountId,
                     currentUserEmail = currentUserEmail
                 )
                 .catch { exception ->
@@ -88,18 +107,20 @@ class ChatDetailViewModel @Inject constructor(
                         onSuccess = { messages ->
                             Log.d(TAG, "加载消息成功: ${messages.size} 条消息")
                             
-                            // 提取联系人信息（从第一条消息）
-                            val firstMessage = messages.firstOrNull()
-                            val contactName = firstMessage?.senderName ?: ""
-                            val contactEmail = firstMessage?.senderId ?: ""
+                            // 联系人信息直接使用 conversationId（即联系人邮箱）
+                            // 从消息中查找联系人的显示名称
+                            val contactDisplayName = messages.firstOrNull { message ->
+                                message.senderId == conversationId
+                            }?.senderName ?: conversationId
                             
                             _uiState.update {
                                 it.copy(
                                     messages = messages,
                                     isLoading = false,
                                     error = null,
-                                    contactName = contactName,
-                                    contactEmail = contactEmail,
+                                    contactName = contactDisplayName,
+                                    contactEmail = conversationId, // 使用对话ID作为联系人邮箱
+                                    currentUserEmail = currentUserEmail,
                                     currentPage = 0,
                                     hasMore = messages.size >= PAGE_SIZE
                                 )
@@ -139,12 +160,19 @@ class ChatDetailViewModel @Inject constructor(
                 // 设置刷新状态
                 _uiState.update { it.copy(isRefreshing = true, error = null) }
                 
-                // 获取当前用户邮箱
-                val currentUserEmail = getCurrentUserEmail()
+                // 获取当前账户和邮箱
+                val currentAccount = getCurrentAccount()
+                val currentUserEmail = currentAccount?.email ?: ""
+                val accountId = currentAccount?.id
+                _uiState.update { it.copy(currentUserEmail = currentUserEmail) }
+                if (currentAccount == null) {
+                    Log.w(TAG, "未找到默认账户，刷新时使用所有账户的数据源")
+                }
                 
                 // 重新加载消息
                 getConversationMessagesUseCase(
-                    threadId = conversationId,
+                    contactEmail = conversationId,
+                    accountId = accountId,
                     currentUserEmail = currentUserEmail
                 )
                 .catch { exception ->
@@ -504,24 +532,17 @@ class ChatDetailViewModel @Inject constructor(
     }
     
     /**
-     * 获取当前用户邮箱
-     * 
-     * @return 用户邮箱地址
-     */
-    private suspend fun getCurrentUserEmail(): String {
-        // TODO: 从 AccountRepository 获取当前用户邮箱
-        // 暂时返回空字符串
-        return ""
-    }
-    
-    /**
      * 获取当前账户
      * 
      * @return 当前账户，如果没有则返回 null
      */
     private suspend fun getCurrentAccount(): takagi.ru.fleur.domain.model.Account? {
-        // TODO: 从 AccountRepository 获取当前账户
-        // 暂时返回 null
-        return null
+        return try {
+            accountRepository.getDefaultAccount().firstOrNull()
+                ?: accountRepository.getAccounts().firstOrNull()?.firstOrNull()
+        } catch (e: Exception) {
+            Log.e(TAG, "获取当前账户失败", e)
+            null
+        }
     }
 }

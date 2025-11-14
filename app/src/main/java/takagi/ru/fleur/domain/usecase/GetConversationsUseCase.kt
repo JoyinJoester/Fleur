@@ -1,8 +1,10 @@
 package takagi.ru.fleur.domain.usecase
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import takagi.ru.fleur.data.mapper.ConversationMapper
+import takagi.ru.fleur.domain.model.Email
 import takagi.ru.fleur.domain.repository.AccountRepository
 import takagi.ru.fleur.domain.repository.EmailRepository
 import takagi.ru.fleur.ui.model.ConversationUiModel
@@ -11,8 +13,8 @@ import javax.inject.Inject
 /**
  * 获取对话列表用例
  * 
- * 将邮件按线程分组，转换为对话列表
- * 每个线程代表一个对话
+ * 将邮件按联系人分组，转换为对话列表
+ * 每个联系人代表一个对话
  */
 class GetConversationsUseCase @Inject constructor(
     private val emailRepository: EmailRepository,
@@ -34,26 +36,46 @@ class GetConversationsUseCase @Inject constructor(
         return emailRepository.getEmails(
             accountId = accountId,
             page = page,
-            pageSize = pageSize
+            pageSize = pageSize * 5 // 获取更多邮件以确保聚合后有足够对话
         ).map { result ->
             result.mapCatching { emails ->
                 // 获取当前用户邮箱地址
                 val currentUserEmail = getCurrentUserEmail(accountId)
                 
-                // 按 threadId 分组邮件
-                val emailsByThread = emails.groupBy { it.threadId }
+                // 按联系人邮箱分组邮件（聊天列表逻辑）
+                val emailsByContact = emails.groupBy { email ->
+                    determineContactEmail(email, currentUserEmail)
+                        .trim()
+                        .lowercase()
+                }
                 
-                // 将每个线程转换为对话模型
-                emailsByThread.map { (threadId, threadEmails) ->
-                    ConversationMapper.fromEmailThread(
-                        threadId = threadId,
-                        emails = threadEmails,
+                // 将每个联系人的邮件转换为一个对话模型
+                emailsByContact.map { (contactEmail, contactEmails) ->
+                    ConversationMapper.fromContactEmails(
+                        contactEmail = contactEmail,
+                        emails = contactEmails,
                         currentUserEmail = currentUserEmail
                     )
                 }
                 // 按最后消息时间降序排序
                 .sortedByDescending { it.lastMessageTime }
+                // 应用分页限制
+                .take(pageSize)
             }
+        }
+    }
+    
+    /**
+     * 确定联系人邮箱地址
+     * 如果当前用户是发件人，返回第一个收件人；否则返回发件人
+     */
+    private fun determineContactEmail(email: Email, currentUserEmail: String): String {
+        return if (email.from.address.equals(currentUserEmail, ignoreCase = true)) {
+            // 当前用户是发件人，取第一个收件人
+            email.to.firstOrNull()?.address ?: email.from.address
+        } else {
+            // 当前用户是收件人，取发件人
+            email.from.address
         }
     }
     
@@ -64,9 +86,14 @@ class GetConversationsUseCase @Inject constructor(
      * @return 用户邮箱地址
      */
     private suspend fun getCurrentUserEmail(accountId: String?): String {
-        // TODO: 实现从 AccountRepository 获取当前用户邮箱
-        // 这里暂时返回空字符串，实际应该从 Flow 中获取
-        // 由于 Flow 的异步特性，可能需要重构为在 ViewModel 中处理
-        return ""
+        return try {
+            if (accountId != null) {
+                accountRepository.getAccountById(accountId).first()?.email ?: ""
+            } else {
+                accountRepository.getDefaultAccount().first()?.email ?: ""
+            }
+        } catch (e: Exception) {
+            ""
+        }
     }
 }
