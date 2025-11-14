@@ -188,13 +188,15 @@ fun ComposeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .heightIn(min = 200.dp)
             ) {
                 OutlinedTextField(
                     value = uiState.body,
                     onValueChange = { viewModel.updateBody(it) },
                     placeholder = { Text("撰写邮件...") },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp),
                     singleLine = false
                 )
                 
