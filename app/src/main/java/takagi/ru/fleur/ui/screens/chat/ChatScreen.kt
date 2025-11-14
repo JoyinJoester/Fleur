@@ -1,11 +1,16 @@
 package takagi.ru.fleur.ui.screens.chat
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Chat
@@ -13,6 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -37,6 +44,7 @@ import takagi.ru.fleur.ui.screens.chat.components.ConversationItem
 fun ChatScreen(
     onNavigateToDetail: (String) -> Unit,
     onNavigateToSearch: () -> Unit,
+    onMenuClick: () -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
@@ -44,6 +52,7 @@ fun ChatScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var searchQuery by remember { mutableStateOf("") }
     
     // 监听滚动位置，自动加载更多
     LaunchedEffect(listState) {
@@ -75,24 +84,67 @@ fun ChatScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("对话") },
-                actions = {
-                    // 搜索按钮
-                    IconButton(onClick = onNavigateToSearch) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "搜索"
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 搜索框（占据大部分宽度）
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = {
+                                Text("搜索对话")
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "搜索"
+                                )
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp),
+                            shape = RoundedCornerShape(28.dp), // 完全圆角
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent
+                            ),
+                            singleLine = true
                         )
+                        
+                        // 头像按钮（40dp圆形）
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { /* TODO: 账户管理 */ },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "对",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
-                    
-                    // 更多菜单按钮
-                    IconButton(onClick = { /* TODO: 显示菜单 */ }) {
+                },
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
                         Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "更多"
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "菜单"
                         )
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background
+                ),
                 scrollBehavior = scrollBehavior
             )
         }

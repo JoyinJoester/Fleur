@@ -208,7 +208,8 @@ fun NavGraph(
                 },
                 onNavigateToSearch = {
                     navController.navigate(Screen.Search.route)
-                }
+                },
+                onMenuClick = onMenuClick
             )
         }
         
